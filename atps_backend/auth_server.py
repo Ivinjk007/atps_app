@@ -138,7 +138,20 @@ def login():
             "success": False,
             "message": "Invalid Username or Password"
         }), 401
+# ================= GET ALL REGISTERED UNITS =================
+@app.route('/api/units', methods=['GET'])
+def get_units():
+    try:
+        # Fetch only DRIVER accounts
+        drivers = list(users_collection.find(
+            {"role": "DRIVER"},
+            {"_id": 0, "unit_id": 1, "name": 1}
+        ))
 
+        return jsonify(drivers), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 # ================= RUN SERVER =================
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

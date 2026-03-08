@@ -61,50 +61,52 @@ class TrafficService {
   }
 
   // ================= SIGNUP =================
-  Future<Map<String, dynamic>> signup(
-      String name,
-      String username,
-      String password,
-      String unitId,
-      String role) async {
+   Future<Map<String, dynamic>> signup(
+  String name,
+  String username,
+  String password,
+  String unitId,
+  String phone,
+  String role,
+) async {
 
-    if (!useRealServer) {
-      await Future.delayed(const Duration(seconds: 2));
-      return {"success": true};
-    }
+  if (!useRealServer) {
+    await Future.delayed(const Duration(seconds: 2));
+    return {"success": true};
+  }
 
-    try {
-      final response = await http.post(
-        Uri.parse("$serverUrl/signup"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "name": name,
-          "username": username,
-          "password": password,
-          "unit_id": unitId,
-          "role": role,
-        }),
-      );
+  try {
+    final response = await http.post(
+      Uri.parse("$serverUrl/signup"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "name": name,
+        "username": username,
+        "password": password,
+        "unit_id": unitId,
+        "phone": phone,     // ADDED
+        "role": role,
+      }),
+    );
 
-      final data = jsonDecode(response.body);
+    final data = jsonDecode(response.body);
 
-      // 🔥 VERY IMPORTANT: CHECK STATUS CODE
-      if (response.statusCode == 201) {
-        return data; // success
-      } else {
-        return {
-          "success": false,
-          "message": data["message"] ?? "Signup failed"
-        };
-      }
-
-    } catch (e) {
+    if (response.statusCode == 201) {
+      return data;
+    } else {
       return {
         "success": false,
-        "message": "Connection Failed"
+        "message": data["message"] ?? "Signup failed"
       };
     }
+
+  } catch (e) {
+    return {
+      "success": false,
+      "message": "Connection Failed"
+    };
   }
+}
 
   // ================= TRAFFIC METHODS =================
   Future<void> requestGreen(String unitId) async {

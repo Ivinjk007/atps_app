@@ -5,14 +5,25 @@ import 'atps_store.dart';
 import 'login_screen.dart'; 
 import 'main.dart';
 
-class AdminDashboard extends StatelessWidget {
+class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final store = AtpsStore(); // Access the store
+  State<AdminDashboard> createState() => _AdminDashboardState();
+}
 
-    return Scaffold(
+class _AdminDashboardState extends State<AdminDashboard> {
+  final AtpsStore store = AtpsStore();
+
+  @override
+  void initState() {
+    super.initState();
+    store.fetchRegisteredUnits();
+  }
+
+  @override
+Widget build(BuildContext context) {
+  return Scaffold(
       backgroundColor: const Color(0xFF0B0E14),
       appBar: AppBar(
         backgroundColor: const Color(0xFF0B0E14),
@@ -41,55 +52,65 @@ class AdminDashboard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. STATS ROW
-            Row(
-              children: [
-                Expanded(
-                  child: Watch(
-                    (_) => _buildStatCard(
-                      "Active Emergencies",
-                      "${store.activeEmergenciesCount.value}",
-                      Colors.redAccent,
-                      LucideIcons.siren,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Watch(
-                    (_) => _buildStatCard(
-                      "Pending Requests",
-                      "${store.pendingRequestsCount.value}",
-                      Colors.orangeAccent,
-                      LucideIcons.alertTriangle,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatCard(
-                    "Online Units",
-                    "12",
-                    Colors.greenAccent,
-                    LucideIcons.wifi,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildStatCard(
-                    "Controlled Signals",
-                    "48",
-                    Colors.blueAccent,
-                    LucideIcons.activity,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
+            // 1. STATS ROW (Kochi Control Center)
+Row(
+  children: [
+    Expanded(
+      child: Watch(
+        (_) => _buildStatCard(
+          "Active Emergencies",
+          "${store.activeEmergenciesCount.value}",
+          Colors.redAccent,
+          LucideIcons.siren,
+        ),
+      ),
+    ),
+    const SizedBox(width: 16),
+    Expanded(
+      child: GestureDetector(
+        onTap: () => _showUnitDetails(context),
+        child: Watch(
+          (_) => _buildStatCard(
+            "Registered Units",
+            "${store.registeredUnitsCount.value}",
+            Colors.greenAccent,      // ✅ Color first
+            LucideIcons.users,       // ✅ Icon second
+          ),
+        ),
+      ),
+    ),
+  ],
+),
+const SizedBox(height: 16),
+Row(
+  children: [
+    // --- KL-07 UNITS (Shows real DB count & opens details on click) ---
+    Expanded(
+      child: GestureDetector(
+        onTap: () => _showUnitDetails(context), // Shows the Kochi unit details popup
+        child: Watch(
+          (_) => _buildStatCard(
+            "Available units", // Localized label for Kochi Ernakulam
+            "${store.registeredUnitsCount.value}", // Real count from your database
+            Colors.greenAccent,
+            LucideIcons.checkCircle,
+          ),
+        ),
+      ),
+    ),
+    const SizedBox(width: 16),
+    // --- CONTROLLED SIGNALS (Manual Junction Overrides) ---
+    Expanded(
+      child: _buildStatCard(
+        "Controlled Signals",
+        "28", // Updated to a realistic count for Kochi junctions
+        Colors.blueAccent,
+        LucideIcons.activity,
+      ),
+    ),
+  ],
+),
+const SizedBox(height: 32),
 
             // 2. EMERGENCY REQUESTS
               _sectionHeader("Incoming Requests"),
@@ -139,6 +160,97 @@ class AdminDashboard extends StatelessWidget {
             }),
           ],
         ),
+      ),
+    );
+  }
+
+ void _showUnitDetails(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF151B25),
+        title: const Text(
+          "Registered Database Units",
+          style: TextStyle(color: Colors.white),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Watch((_) {
+            final units = store.registeredUnits.value;
+
+            if (units.isEmpty) {
+              return const Text(
+                "No users found in database.",
+                style: TextStyle(color: Colors.grey),
+              );
+            }
+
+            return ListView.builder(
+              shrinkWrap: true,
+              itemCount: units.length,
+              itemBuilder: (context, index) {
+                final user = units[index];
+                void _showUnitDetails(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF151B25),
+        title: const Text(
+          "Registered Database Units",
+          style: TextStyle(color: Colors.white),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Watch((_) {
+            final units = store.registeredUnits.value;
+
+            if (units.isEmpty) {
+              return const Text(
+                "No users found in database.",
+                style: TextStyle(color: Colors.grey),
+              );
+            }
+
+            return ListView.builder(
+              shrinkWrap: true,
+              itemCount: units.length,
+              itemBuilder: (context, index) {
+                final user = units[index];
+                return ListTile(
+                  leading: const Icon(Icons.person,
+                      color: Colors.blueAccent),
+                  title: Text(
+                    user['unit_id'] ?? "Unknown Unit",
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  subtitle: Text(
+                    "Contact: ${user['phone'] ?? 'N/A'}",
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                );
+              },
+            );
+          }),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Close"),
+          ),
+        ],
+      ),
+    );
+  }
+              },
+            );
+          }),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Close"),
+          ),
+        ],
       ),
     );
   }

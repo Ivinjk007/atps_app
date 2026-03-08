@@ -1,9 +1,53 @@
 import 'package:flutter/material.dart';
 import 'package:signals_flutter/signals_flutter.dart';
 import 'traffic_service.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class AtpsStore {
   final _api = TrafficService();
+
+  // Holds ambulance units from DB
+final registeredUnits =
+    signal<List<Map<String, dynamic>>>([]);
+
+// Counts registered units
+late final registeredUnitsCount =
+    computed(() => registeredUnits.value.length);
+
+// Counts available units (not in active emergency)
+late final availableUnitsCount = computed(() {
+  final totalUnits = registeredUnits.value.length;
+
+  final busyUnits = emergencyRequests.value
+      .where((req) => req['status'] == 'APPROVED')
+      .length;
+
+  return totalUnits - busyUnits;
+});
+ 
+
+  // Counts approved emergencies
+  late final activeEmergenciesCount =
+      computed(() =>
+          emergencyRequests.value
+              .where((req) =>
+                  req['status'] == 'APPROVED')
+              .length);
+      Future<void> fetchRegisteredUnits() async {
+  try {
+    final response = await http.get(
+      Uri.parse("http://172.30.30.79:5000/api/units"),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      registeredUnits.value = List<Map<String, dynamic>>.from(data);
+    }
+  } catch (e) {
+    print("Error fetching units: $e");
+  }
+}        
 
   // =========================
   // DRIVER STATE
@@ -68,8 +112,6 @@ final trafficSignals = listSignal<Map<String, dynamic>>([
   late final signalText =
       computed(() => status.value == "GREEN" ? "GREEN" : "RED");
 
-  late final activeEmergenciesCount = computed(
-      () => emergencyRequests.value.where((r) => r['status'] == 'APPROVED').length);
 
   late final pendingRequestsCount = computed(
       () => emergencyRequests.value.where((r) => r['status'] == 'PENDING').length);
@@ -95,23 +137,27 @@ final trafficSignals = listSignal<Map<String, dynamic>>([
   }
 
   // --- ACTIONS: ADMIN ---
-  void approveRequest(String id) {
-    final index = emergencyRequests.value.indexWhere((element) => element['id'] == id);
-    if (index != -1) {
-      var req = Map<String, dynamic>.from(emergencyRequests.value[index]);
-      req['status'] = 'APPROVED';
-      emergencyRequests.value[index] = req;
-    }
+void approveRequest(String requestId) {
+  // Finds the request in our Kochi list and updates status
+  final currentRequests = List<Map<String, dynamic>>.from(emergencyRequests.value);
+  final index = currentRequests.indexWhere((req) => req['id'] == requestId);
+  
+  if (index != -1) {
+    currentRequests[index]['status'] = 'APPROVED';
+    emergencyRequests.value = currentRequests; // This triggers the UI refresh
+    print("Approved request for: ${currentRequests[index]['unit']}");
   }
+}
 
-  void denyRequest(String id) {
-    final index = emergencyRequests.value.indexWhere((element) => element['id'] == id);
-    if (index != -1) {
-      var req = Map<String, dynamic>.from(emergencyRequests.value[index]);
-      req['status'] = 'DENIED';
-      emergencyRequests.value[index] = req;
-    }
+void denyRequest(String requestId) {
+  final currentRequests = List<Map<String, dynamic>>.from(emergencyRequests.value);
+  final index = currentRequests.indexWhere((req) => req['id'] == requestId);
+  
+  if (index != -1) {
+    currentRequests[index]['status'] = 'DENIED';
+    emergencyRequests.value = currentRequests; // This triggers the UI refresh
   }
+}
 
 void toggleSignalManual(String id) {
   final index = trafficSignals.value
@@ -155,23 +201,29 @@ void toggleSignalManual(String id) {
   String username,
   String password,
   String unitId,
+  String phone,
   String role,
 ) async {
 
-    isLoading.value = true;
-    
-    // Call API
-    final result = await _api.signup(name, username, password, unitId, "DRIVER"); 
-    
-    isLoading.value = false;
+  isLoading.value = true;
 
-    if (result['success'] == true) {
-      return true; // Success!
-    }  else {
+  final result = await _api.signup(
+    name,
+    username,
+    password,
+    unitId,
+    phone,
+    role,
+  );
+
+  isLoading.value = false;
+
+  if (result['success'] == true) {
+    return true;
+  } else {
     throw Exception(result['message']);
-    }
   }
-
+}
   // 2. Create Admin Account (REAL SERVER VERSION)
 Future<bool> createAdminAccount(
   String name,
@@ -188,6 +240,7 @@ Future<bool> createAdminAccount(
     username,
     password,
     cyberId,
+    "",
     "ADMIN",
   );
 
@@ -199,4 +252,5 @@ Future<bool> createAdminAccount(
     throw Exception(result['message']);
   }
 }
+
 }

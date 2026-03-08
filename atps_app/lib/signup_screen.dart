@@ -14,52 +14,70 @@ class _SignupScreenState extends State<SignupScreen> {
   final _nameController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _unitIdController = TextEditingController();
 
   final store = AtpsStore();
 
   void _handleSignup() async {
-  final name = _nameController.text.trim();
-  final username = _usernameController.text.trim();
-  final password = _passwordController.text.trim();
-  final unitId = _unitIdController.text.trim();
+    final name = _nameController.text.trim();
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text.trim();
+    final phone = _phoneController.text.trim();
+    final unitId = _unitIdController.text.trim();
 
-  if (name.isEmpty ||
-      username.isEmpty ||
-      password.isEmpty ||
-      unitId.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("All fields are required"),
-        backgroundColor: Colors.red,
-      ),
-    );
-    return;
-  }
-
-  try {
-    bool success =
-        await store.createAccount(name, username, password, unitId, "DRIVER");
-
-    if (success && mounted) {
+    if (name.isEmpty ||
+        username.isEmpty ||
+        password.isEmpty ||
+        phone.isEmpty ||
+        unitId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Driver Account Created!"),
-          backgroundColor: Colors.green,
+          content: Text("All fields are required"),
+          backgroundColor: Colors.red,
         ),
       );
-      Navigator.pop(context);
+      return;
     }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(e.toString()),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
-}
 
+    if (phone.length < 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Enter a valid contact number"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      bool success = await store.createAccount(
+        name,
+        username,
+        password,
+        unitId,
+        phone,
+        "DRIVER",
+      );
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Driver Account Created Successfully"),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll("Exception: ", "")),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -95,8 +113,13 @@ class _SignupScreenState extends State<SignupScreen> {
               _buildTextField("Password", Icons.lock, _passwordController, isPassword: true),
               const SizedBox(height: 16),
 
-              _buildTextField("ESP32 Unit ID (e.g., AMB-001)", Icons.qr_code, _unitIdController),
+              _buildTextField("Contact Number", Icons.phone, _phoneController),
+              const SizedBox(height: 16),
 
+              _buildTextField(
+                  "ESP32 Unit ID (e.g., AMB-001)",
+                  Icons.qr_code,
+                  _unitIdController),
               const SizedBox(height: 32),
 
               Watch((context) => SizedBox(
@@ -115,8 +138,9 @@ class _SignupScreenState extends State<SignupScreen> {
                           : const Text(
                               "CREATE ACCOUNT",
                               style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold),
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                     ),
                   )),
@@ -137,6 +161,8 @@ class _SignupScreenState extends State<SignupScreen> {
       controller: controller,
       obscureText: isPassword,
       style: const TextStyle(color: Colors.white),
+      keyboardType:
+          label == "Contact Number" ? TextInputType.phone : TextInputType.text,
       decoration: InputDecoration(
         labelText: label,
         labelStyle: const TextStyle(color: Colors.grey),
