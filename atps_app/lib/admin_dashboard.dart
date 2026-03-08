@@ -165,95 +165,111 @@ const SizedBox(height: 32),
   }
 
  void _showUnitDetails(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF151B25),
-        title: const Text(
-          "Registered Database Units",
-          style: TextStyle(color: Colors.white),
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: Watch((_) {
-            final units = store.registeredUnits.value;
-
-            if (units.isEmpty) {
-              return const Text(
-                "No users found in database.",
-                style: TextStyle(color: Colors.grey),
-              );
-            }
-
-            return ListView.builder(
-              shrinkWrap: true,
-              itemCount: units.length,
-              itemBuilder: (context, index) {
-                final user = units[index];
-                void _showUnitDetails(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF151B25),
-        title: const Text(
-          "Registered Database Units",
-          style: TextStyle(color: Colors.white),
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: Watch((_) {
-            final units = store.registeredUnits.value;
-
-            if (units.isEmpty) {
-              return const Text(
-                "No users found in database.",
-                style: TextStyle(color: Colors.grey),
-              );
-            }
-
-            return ListView.builder(
-              shrinkWrap: true,
-              itemCount: units.length,
-              itemBuilder: (context, index) {
-                final user = units[index];
-                return ListTile(
-                  leading: const Icon(Icons.person,
-                      color: Colors.blueAccent),
-                  title: Text(
-                    user['unit_id'] ?? "Unknown Unit",
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  subtitle: Text(
-                    "Contact: ${user['phone'] ?? 'N/A'}",
-                    style: const TextStyle(color: Colors.grey),
-                  ),
-                );
-              },
-            );
-          }),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Close"),
-          ),
-        ],
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: const Color(0xFF151B25),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text(
+        "Ambulance Unit Details",
+        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
       ),
-    );
-  }
-              },
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Watch((_) {
+          final units = store.registeredUnits.value;
+
+          if (units.isEmpty) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Text(
+                "No registered drivers found in database.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
             );
-          }),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Close"),
-          ),
-        ],
+          }
+
+          return ListView.builder(
+            shrinkWrap: true,
+            itemCount: units.length,
+            itemBuilder: (context, index) {
+              final user = units[index];
+              
+              // Check if this specific driver is currently on an APPROVED run
+              bool isBusy = store.emergencyRequests.value.any(
+                (req) => req['unit'] == user['unit_id'] && req['status'] == 'APPROVED'
+              );
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isBusy ? Colors.redAccent.withValues(alpha: 0.3) : Colors.greenAccent.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          user['unit_id'] ?? "Unknown Unit",
+                          style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isBusy ? Colors.redAccent.withValues(alpha: 0.1) : Colors.greenAccent.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            isBusy ? "BUSY" : "AVAILABLE",
+                            style: TextStyle(
+                              color: isBusy ? Colors.redAccent : Colors.greenAccent,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(color: Colors.white10, height: 20),
+                    _detailRow(Icons.person, "Driver", user['name'] ?? "Unknown Driver"),
+                    const SizedBox(height: 8),
+                    _detailRow(Icons.phone, "Contact", user['phone'] ?? "Not Provided"),
+                  ],
+                ),
+              );
+            },
+          );
+        }),
       ),
-    );
-  }
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Close", style: TextStyle(color: Colors.blueAccent)),
+        ),
+      ],
+    ),
+  );
+}
+
+// Helper widget for clean rows
+Widget _detailRow(IconData icon, String label, String value) {
+  return Row(
+    children: [
+      Icon(icon, size: 14, color: Colors.grey),
+      const SizedBox(width: 8),
+      Text("$label: ", style: const TextStyle(color: Colors.grey, fontSize: 13)),
+      Text(value, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+    ],
+  );
+}
 
   // ---------- REQUEST CARD ----------
   Widget _buildRequestCard(Map<String, dynamic> req, AtpsStore store) {

@@ -35,19 +35,24 @@ late final availableUnitsCount = computed(() {
                   req['status'] == 'APPROVED')
               .length);
       Future<void> fetchRegisteredUnits() async {
+  isLoading.value = true;
+
   try {
     final response = await http.get(
       Uri.parse("http://172.30.30.79:5000/api/units"),
     );
 
     if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      registeredUnits.value = List<Map<String, dynamic>>.from(data);
+      List<dynamic> data = jsonDecode(response.body);
+      registeredUnits.value =
+          List<Map<String, dynamic>>.from(data);
     }
   } catch (e) {
-    print("Error fetching units: $e");
+    print("Fetch error: $e");
+  } finally {
+    isLoading.value = false;
   }
-}        
+}   
 
   // =========================
   // DRIVER STATE
