@@ -5,6 +5,11 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class AtpsStore {
+  // Singleton pattern to ensure state is shared across dashboards during local testing
+  static final AtpsStore _instance = AtpsStore._internal();
+  factory AtpsStore() => _instance;
+  AtpsStore._internal();
+
   final _api = TrafficService();
 
   // Holds ambulance units from DB
@@ -69,29 +74,7 @@ late final availableUnitsCount = computed(() {
 
   // Inside your AtpsStore class in lib/atps_store.dart
 
-final emergencyRequests = signal<List<Map<String, dynamic>>>([
-  {
-    "id": "1",
-    "unit": "KANIV-108 (KL-07-BZ-4210)",
-    "location": "Vyttila Hub ➔ Medical Trust Hospital",
-    "status": "PENDING",
-    "eta": "2 min",
-  },
-  {
-    "id": "2",
-    "unit": "AMB-P12 (Private)",
-    "location": "MG Road ➔ Aster Medcity",
-    "status": "APPROVED",
-    "eta": "5 min",
-  },
-  {
-    "id": "3",
-    "unit": "FIRE-09 (KL-07-AL)",
-    "location": "Marine Drive ➔ Ernakulam Market",
-    "status": "COMPLETED",
-    "eta": "12 min",
-  },
-]);
+final emergencyRequests = signal<List<Map<String, dynamic>>>([]);
 
 final trafficSignals = listSignal<Map<String, dynamic>>([
   {"id": "S1", "name": "Vyttila Junction", "status": "RED", "online": true},
@@ -118,18 +101,27 @@ final trafficSignals = listSignal<Map<String, dynamic>>([
       computed(() => status.value == "GREEN" ? "GREEN" : "RED");
 
 
-  late final pendingRequestsCount = computed(
-      () => emergencyRequests.value.where((r) => r['status'] == 'PENDING').length);
-
   // =========================
   // TRAFFIC ACTIONS
   // =========================
 
-  Future<void> requestPriority() async {
+  Future<void> requestPriority(String fromLocation, String toLocation) async {
     if (status.value == "GREEN") return;
 
     isLoading.value = true;
     await _api.requestGreen(unitId.value);
+    
+    // Auto-update active emergency cases
+    final currentRequests = List<Map<String, dynamic>>.from(emergencyRequests.value);
+    currentRequests.add({
+      "id": DateTime.now().millisecondsSinceEpoch.toString(),
+      "unit": unitId.value,
+      "location": "$fromLocation ➔ $toLocation",
+      "status": "APPROVED",
+      "eta": eta.value,
+    });
+    emergencyRequests.value = currentRequests;
+
     status.value = "GREEN";
     isLoading.value = false;
   }
@@ -137,49 +129,61 @@ final trafficSignals = listSignal<Map<String, dynamic>>([
   Future<void> reset() async {
     isLoading.value = true;
     await _api.resetSignal();
+
+    // Auto-remove from active emergencies
+    final currentRequests = List<Map<String, dynamic>>.from(emergencyRequests.value);
+    for (var req in currentRequests) {
+      if (req['unit'] == unitId.value && req['status'] == 'APPROVED') {
+        req['status'] = 'COMPLETED';
+      }
+    }
+    emergencyRequests.value = currentRequests;
+
     status.value = "RED";
     isLoading.value = false;
   }
 
   // --- ACTIONS: ADMIN ---
-void approveRequest(String requestId) {
-  // Finds the request in our Kochi list and updates status
-  final currentRequests = List<Map<String, dynamic>>.from(emergencyRequests.value);
-  final index = currentRequests.indexWhere((req) => req['id'] == requestId);
-  
-  if (index != -1) {
-    currentRequests[index]['status'] = 'APPROVED';
-    emergencyRequests.value = currentRequests; // This triggers the UI refresh
-    print("Approved request for: ${currentRequests[index]['unit']}");
-  }
-}
 
 void denyRequest(String requestId) {
   final currentRequests = List<Map<String, dynamic>>.from(emergencyRequests.value);
   final index = currentRequests.indexWhere((req) => req['id'] == requestId);
   
   if (index != -1) {
-    currentRequests[index]['status'] = 'DENIED';
+    currentRequests[index]['status'] = 'COMPLETED';
     emergencyRequests.value = currentRequests; // This triggers the UI refresh
   }
 }
 
-void toggleSignalManual(String id) {
-  final index = trafficSignals.value
-      .indexWhere((element) => element['id'] == id);
+Future<void> toggleSignalManual(String junctionId) async {
+  try {
+    final index = trafficSignals.value
+        .indexWhere((element) => element['id'] == junctionId);
 
-  if (index != -1) {
-    var sig =
-        Map<String, dynamic>.from(trafficSignals.value[index]);
+    if (index == -1) return;
 
-    sig['status'] =
-        sig['status'] == 'RED' ? 'GREEN' : 'RED';
+    var sig = Map<String, dynamic>.from(trafficSignals.value[index]);
 
+    String newColor = sig['status'] == 'RED' ? 'GREEN' : 'RED';
+
+    // Update UI immediately
+    sig['status'] = newColor;
     trafficSignals.value[index] = sig;
-    
+
+    // Send command to Flask backend
+    await http.post(
+      Uri.parse("http://172.30.30.79:5000/api/admin/signal_override"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "junction_id": junctionId,
+        "desired_color": newColor
+      }),
+    );
+
+  } catch (e) {
+    print("Signal override error: $e");
   }
 }
-
   // --- ACTIONS: AUTHENTICATION ---
 
   // 1. Login
@@ -257,5 +261,40 @@ Future<bool> createAdminAccount(
     throw Exception(result['message']);
   }
 }
+Future<bool> addNewSignal(
+  String junctionId,
+  String junctionName,
+  String lat,
+  String lon,
+  String esp32Id,
+  String triggerRadius,
+  String mode,
+) async {
+  try {
+    final response = await http.post(
+      Uri.parse("http://172.30.30.79:5000/api/admin/add_signal"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "junction_id": junctionId,
+        "junction_name": junctionName,
+        "landmark": junctionName,
+        "lat": lat,
+        "lon": lon,
+        "esp32_id": esp32Id,
+        "trigger_radius": triggerRadius,
+        "mode": mode,
+      }),
+    );
 
+    if (response.statusCode == 201) {
+      return true;
+    } else {
+      print("Add signal failed: ${response.body}");
+      return false;
+    }
+  } catch (e) {
+    print("Add signal error: $e");
+    return false;
+  }
+}
 }

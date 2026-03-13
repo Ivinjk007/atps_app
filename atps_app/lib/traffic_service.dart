@@ -15,7 +15,7 @@ class TrafficService {
     } else {
       // 2. If running on a Physical Phone or Android Emulator
       // Put your computer's EXACT IPv4 address here. 
-      return "http://172.30.29.57:5000/api"; 
+      return "http://172.30.30.79:5000/api"; 
     }
   }
 

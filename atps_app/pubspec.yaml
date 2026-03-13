@@ -43,6 +43,8 @@ dependencies:
   # iOS-style icons
   cupertino_icons: ^1.0.8
   http: ^1.2.0
+  flutter_map: ^8.2.2
+  latlong2: ^0.9.1
 
 
 dev_dependencies:

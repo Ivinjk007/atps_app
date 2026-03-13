@@ -21,6 +21,126 @@ class _AdminDashboardState extends State<AdminDashboard> {
     store.fetchRegisteredUnits();
   }
 
+  void _showAddSignalDialog(BuildContext context) {
+  final _idController = TextEditingController();
+  final _nameController = TextEditingController();
+  final _latController = TextEditingController();
+  final _lonController = TextEditingController();
+  final _espController = TextEditingController();
+  final _radiusController = TextEditingController(text: "500");
+  String _selectedMode = 'AUTO';
+
+  showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        backgroundColor: const Color(0xFF151B25),
+        title: const Text(
+          "Add New Controlled Signal",
+          style: TextStyle(color: Colors.white),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _idController,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: "Junction ID (e.g. J-01)",
+                  labelStyle: TextStyle(color: Colors.grey),
+                ),
+              ),
+              TextField(
+                controller: _nameController,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: "Junction Name",
+                  labelStyle: TextStyle(color: Colors.grey),
+                ),
+              ),
+              TextField(
+                controller: _latController,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: "Latitude",
+                  labelStyle: TextStyle(color: Colors.grey),
+                ),
+              ),
+              TextField(
+                controller: _lonController,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: "Longitude",
+                  labelStyle: TextStyle(color: Colors.grey),
+                ),
+              ),
+              TextField(
+                controller: _espController,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: "ESP32 Controller ID",
+                  labelStyle: TextStyle(color: Colors.grey),
+                ),
+              ),
+              TextField(
+                controller: _radiusController,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: "Trigger Radius (meters)",
+                  labelStyle: TextStyle(color: Colors.grey),
+                ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButton<String>(
+                dropdownColor: const Color(0xFF151B25),
+                value: _selectedMode,
+                items: ["AUTO", "MANUAL"]
+                    .map((m) => DropdownMenuItem(
+                          value: m,
+                          child: Text(
+                            m,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ))
+                    .toList(),
+                onChanged: (val) {
+                  setState(() {
+                    _selectedMode = val!;
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              bool success = await store.addNewSignal(
+                _idController.text,
+                _nameController.text,
+                _latController.text,
+                _lonController.text,
+                _espController.text,
+                _radiusController.text,
+                _selectedMode,
+              );
+
+              if (success) {
+                Navigator.pop(context);
+              }
+            },
+            child: const Text("Add Signal"),
+          ),
+        ],
+      ),
+    ),
+  );
+}
   @override
 Widget build(BuildContext context) {
   return Scaffold(
@@ -28,23 +148,33 @@ Widget build(BuildContext context) {
       appBar: AppBar(
         backgroundColor: const Color(0xFF0B0E14),
         title: const Text("Admin Dashboard"),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.blueAccent),
-            tooltip: "Logout",
-            onPressed: () {
-              AppSession.loggedInRole = null;
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const LandingScreen(),
-                ),
-                (route) => false,
-              );
-            },
-          ),
-    const SizedBox(width: 8),
-  ],
+       actions: [
+  IconButton(
+    icon: const Icon(Icons.history, color: Colors.orangeAccent),
+    tooltip: "History Log",
+    onPressed: () => _showHistoryLog(context),
+  ),
+  IconButton(
+    icon: const Icon(Icons.add_road, color: Colors.greenAccent),
+    tooltip: "Add Signal",
+    onPressed: () => _showAddSignalDialog(context),
+  ),
+  IconButton(
+    icon: const Icon(Icons.logout, color: Colors.blueAccent),
+    tooltip: "Logout",
+    onPressed: () {
+      AppSession.loggedInRole = null;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const LandingScreen(),
+        ),
+        (route) => false,
+      );
+    },
+  ),
+  const SizedBox(width: 8),
+],
 ),
 
       body: SingleChildScrollView(
@@ -56,12 +186,15 @@ Widget build(BuildContext context) {
 Row(
   children: [
     Expanded(
-      child: Watch(
-        (_) => _buildStatCard(
-          "Active Emergencies",
-          "${store.activeEmergenciesCount.value}",
-          Colors.redAccent,
-          LucideIcons.siren,
+      child: GestureDetector(
+        onTap: () => _showActiveEmergencyDetails(context),
+        child: Watch(
+          (_) => _buildStatCard(
+            "Active Emergencies",
+            "${store.activeEmergenciesCount.value}",
+            Colors.redAccent,
+            LucideIcons.siren,
+          ),
         ),
       ),
     ),
@@ -87,11 +220,11 @@ Row(
     // --- KL-07 UNITS (Shows real DB count & opens details on click) ---
     Expanded(
       child: GestureDetector(
-        onTap: () => _showUnitDetails(context), // Shows the Kochi unit details popup
+        onTap: () => _showUnitDetails(context, onlyAvailable: true), // Shows only available units
         child: Watch(
           (_) => _buildStatCard(
-            "Available units", // Localized label for Kochi Ernakulam
-            "${store.registeredUnitsCount.value}", // Real count from your database
+            "Available units", 
+            "${store.availableUnitsCount.value}", 
             Colors.greenAccent,
             LucideIcons.checkCircle,
           ),
@@ -164,26 +297,26 @@ const SizedBox(height: 32),
     );
   }
 
- void _showUnitDetails(BuildContext context) {
+ void _showActiveEmergencyDetails(BuildContext context) {
   showDialog(
     context: context,
     builder: (context) => AlertDialog(
       backgroundColor: const Color(0xFF151B25),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: const Text(
-        "Ambulance Unit Details",
+        "Active Emergencies Details",
         style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
       ),
       content: SizedBox(
         width: double.maxFinite,
         child: Watch((_) {
-          final units = store.registeredUnits.value;
+          final activeReqs = store.emergencyRequests.value.where((req) => req['status'] == 'APPROVED').toList();
 
-          if (units.isEmpty) {
+          if (activeReqs.isEmpty) {
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
               child: Text(
-                "No registered drivers found in database.",
+                "No active emergencies found.",
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey),
               ),
@@ -192,10 +325,121 @@ const SizedBox(height: 32),
 
           return ListView.builder(
             shrinkWrap: true,
-            itemCount: units.length,
+            itemCount: activeReqs.length,
             itemBuilder: (context, index) {
-              final user = units[index];
+              final req = activeReqs[index];
+              final unitId = req['unit'];
               
+              // Find driver details from registeredUnits
+              final unitsList = store.registeredUnits.value;
+              final userMap = unitsList.firstWhere(
+                (u) => u['unit_id'] == unitId, 
+                orElse: () => <String, dynamic>{}
+              );
+              
+              final name = userMap['name'] ?? "Unknown Driver";
+              final phone = userMap['phone'] ?? "Not Provided";
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.redAccent.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          unitId ?? "Unknown Unit",
+                          style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            "ACTIVE",
+                            style: TextStyle(
+                              color: Colors.redAccent,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(color: Colors.white10, height: 20),
+                    _detailRow(Icons.person, "Driver", name),
+                    const SizedBox(height: 8),
+                    _detailRow(Icons.phone, "Contact", phone),
+                    const SizedBox(height: 8),
+                    _detailRow(Icons.location_on, "Location", req['location'] ?? "Unknown"),
+                  ],
+                ),
+              );
+            },
+          );
+        }),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Close", style: TextStyle(color: Colors.blueAccent)),
+        ),
+      ],
+    ),
+  );
+}
+
+ void _showUnitDetails(BuildContext context, {bool onlyAvailable = false}) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: const Color(0xFF151B25),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(
+        onlyAvailable ? "Available Ambulance Units" : "All Registered Units",
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Watch((_) {
+          final units = store.registeredUnits.value;
+
+          // Filter out units that are currently on an APPROVED run
+          final targetUnitsList = onlyAvailable ? units.where((user) {
+            bool isBusy = store.emergencyRequests.value.any(
+              (req) => req['unit'] == user['unit_id'] && req['status'] == 'APPROVED'
+            );
+            return !isBusy;
+          }).toList() : units;
+
+          if (targetUnitsList.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Text(
+                onlyAvailable ? "No available drivers found in database." : "No registered drivers found in database.",
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey),
+              ),
+            );
+          }
+
+          return ListView.builder(
+            shrinkWrap: true,
+            itemCount: targetUnitsList.length,
+            itemBuilder: (context, index) {
+              final user = targetUnitsList[index];
+
               // Check if this specific driver is currently on an APPROVED run
               bool isBusy = store.emergencyRequests.value.any(
                 (req) => req['unit'] == user['unit_id'] && req['status'] == 'APPROVED'
@@ -268,6 +512,113 @@ Widget _detailRow(IconData icon, String label, String value) {
       Text("$label: ", style: const TextStyle(color: Colors.grey, fontSize: 13)),
       Text(value, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
     ],
+  );
+  }
+
+ // --- NEW: HISTORY LOG DIALOG ---
+ void _showHistoryLog(BuildContext context) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: const Color(0xFF151B25),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Row(
+        children: const [
+          Icon(Icons.history, color: Colors.orangeAccent),
+          SizedBox(width: 10),
+          Text(
+            "Emergency Request History",
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Watch((_) {
+          final completedReqs = store.emergencyRequests.value.where((req) => req['status'] == 'COMPLETED').toList();
+
+          if (completedReqs.isEmpty) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Text(
+                "No completed requests in history.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
+            );
+          }
+
+          return ListView.builder(
+            shrinkWrap: true,
+            itemCount: completedReqs.length,
+            itemBuilder: (context, index) {
+              // Show newest first
+              final req = completedReqs[completedReqs.length - 1 - index];
+              final unitId = req['unit'];
+
+              // Attempt to find driver name
+              final unitsList = store.registeredUnits.value;
+              final userMap = unitsList.firstWhere(
+                (u) => u['unit_id'] == unitId, 
+                orElse: () => <String, dynamic>{}
+              );
+              final name = userMap['name'] ?? "Unknown Driver";
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.orangeAccent.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          unitId ?? "Unknown Unit",
+                          style: const TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.orangeAccent.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            "RESOLVED",
+                            style: TextStyle(
+                              color: Colors.orangeAccent,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(color: Colors.white10, height: 20),
+                    _detailRow(Icons.person, "Driver", name),
+                    const SizedBox(height: 8),
+                    _detailRow(Icons.route, "Path Taken", req['location'] ?? "Unknown"),
+                  ],
+                ),
+              );
+            },
+          );
+        }),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Close", style: TextStyle(color: Colors.orangeAccent)),
+        ),
+      ],
+    ),
   );
 }
 
@@ -360,39 +711,25 @@ Widget _detailRow(IconData icon, String label, String value) {
               ),
             ],
           ),
-          if (req['status'] == 'PENDING') ...[
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () =>
-                        store.denyRequest(req['id']),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      side:
-                          const BorderSide(color: Colors.red),
-                    ),
-                    child: const Text("Deny"),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () =>
-                        store.approveRequest(req['id']),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                    ),
-                    child: const Text(
-                      "Approve",
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ),
-              ],
-            )
-          ]
+          if (req['status'] == 'APPROVED') ...[
+  const SizedBox(height: 16),
+  Row(
+    children: [
+      Expanded(
+        child: ElevatedButton(
+          onPressed: () => store.denyRequest(req['id']),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+          ),
+          child: const Text(
+            "Reject / Stop",
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+      ),
+    ],
+  )
+]
         ],
       ),
     );

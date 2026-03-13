@@ -85,7 +85,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
             // BIG CIRCULAR REQUEST BUTTON
             Watch(
               (context) => GestureDetector(
-                onTap: store.requestPriority,
+                onTap: () => _handlePriorityRequest(context),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
                   width: 240,
@@ -212,6 +212,68 @@ class _DriverDashboardState extends State<DriverDashboard> {
             )
           ],
         ),
+      ),
+    );
+  }
+
+  // --- NEW: LOCATION CAPTURE DIALOG ---
+  void _handlePriorityRequest(BuildContext context) {
+    if (store.status.value == "GREEN") return; // Already requested
+
+    final fromController = TextEditingController();
+    final toController = TextEditingController();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF151B25),
+        title: const Text(
+          "Set Route Options",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: fromController,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: "Origin / Current Location",
+                labelStyle: const TextStyle(color: Colors.grey),
+                prefixIcon: const Icon(Icons.my_location, color: Colors.blueAccent),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: toController,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: "Destination Hospital",
+                labelStyle: const TextStyle(color: Colors.grey),
+                prefixIcon: const Icon(Icons.local_hospital, color: Colors.greenAccent),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () {
+              if (fromController.text.isNotEmpty && toController.text.isNotEmpty) {
+                Navigator.pop(context);
+                store.requestPriority(fromController.text.trim(), toController.text.trim());
+              }
+            },
+            child: const Text("ACTIVATE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }
