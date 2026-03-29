@@ -1,18 +1,43 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'login_screen.dart';
-import 'guest_dashboard.dart'; 
+import 'guest_dashboard.dart';
+import 'driver_dashboard.dart';
+import 'admin_dashboard.dart';
+import 'atps_store.dart';
 
-void main() {
-  runApp(const AtpsApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  final prefs = await SharedPreferences.getInstance();
+  final role = prefs.getString('loggedInRole');
+  
+  if (role != null) {
+    AppSession.loggedInRole = role;
+    final store = AtpsStore();
+    store.unitId.value = prefs.getString('unitId') ?? "";
+    store.driverName.value = prefs.getString('driverName') ?? "";
+    store.driverPhone.value = prefs.getString('driverPhone') ?? "";
+  }
+
+  runApp(AtpsApp(initialRole: role));
 }
 
 class AtpsApp extends StatelessWidget {
-  const AtpsApp({super.key});
+  final String? initialRole;
+  const AtpsApp({super.key, this.initialRole});
 
   @override
   Widget build(BuildContext context) {
+    Widget initialScreen = const LandingScreen();
+    if (initialRole == 'ADMIN') {
+      initialScreen = const AdminDashboard();
+    } else if (initialRole == 'DRIVER') {
+      initialScreen = const DriverDashboard();
+    }
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'APTSC Traffic Control',
@@ -22,7 +47,7 @@ class AtpsApp extends StatelessWidget {
         cardColor: const Color(0xFF151B25),
         textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
       ),
-      home: const LandingScreen(),
+      home: initialScreen,
     );
   }
 }
@@ -66,7 +91,7 @@ class LandingScreen extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
-          )
+          ),
         ],
       ),
       body: Center(
@@ -125,23 +150,22 @@ class LandingScreen extends StatelessWidget {
                   ),
 
                   _buildRoleCard(
-                      context,
-                      "Guest Viewer",
-                      "View real-time system status...",
-                      LucideIcons.eye,
-                      Colors.cyanAccent,
-                      () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const GuestDashboard(),
-                          ),
-                        );
-                      },
-                    ),
-
+                    context,
+                    "Guest Viewer",
+                    "View real-time system status...",
+                    LucideIcons.eye,
+                    Colors.cyanAccent,
+                    () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const GuestDashboard(),
+                        ),
+                      );
+                    },
+                  ),
                 ],
-              )
+              ),
             ],
           ),
         ),

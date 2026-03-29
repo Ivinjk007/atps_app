@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:signals_flutter/signals_flutter.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'atps_store.dart';
 import 'login_screen.dart'; 
 import 'main.dart';         
@@ -18,13 +19,18 @@ class _DriverDashboardState extends State<DriverDashboard> {
   // New Priority State
   String _selectedPriority = "Critical";
   // LOGOUT FUNCTION
-  void _logout() {
+  void _logout() async {
     AppSession.loggedInRole = null; // Clear the saved session
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const LandingScreen()),
-      (route) => false, // Destroy the navigation history
-    );
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('loggedInRole');
+
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LandingScreen()),
+        (route) => false, // Destroy the navigation history
+      );
+    }
   }
 
   @override
@@ -164,7 +170,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
                         isExpanded: true,
                         dropdownColor: const Color(0xFF151B25),
                         icon: const Icon(LucideIcons.chevronDown, color: Colors.grey),
-                        items: ['Critical', 'Severe', 'Moderate', 'Non-Critical']
+                        items: ['Critical', 'Non-Critical']
                             .map((priority) => DropdownMenuItem(
                                   value: priority,
                                   child: Row(
@@ -216,74 +222,19 @@ class _DriverDashboardState extends State<DriverDashboard> {
     );
   }
 
-  // --- NEW: LOCATION CAPTURE DIALOG ---
+  // --- LOCATION PROVIDED BY GPS MODULE ---
   void _handlePriorityRequest(BuildContext context) {
     if (store.status.value == "GREEN") return; // Already requested
 
-    final fromController = TextEditingController();
-    final toController = TextEditingController();
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF151B25),
-        title: const Text(
-          "Set Route Options",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: fromController,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                labelText: "Origin / Current Location",
-                labelStyle: const TextStyle(color: Colors.grey),
-                prefixIcon: const Icon(Icons.my_location, color: Colors.blueAccent),
-                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: toController,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                labelText: "Destination Hospital",
-                labelStyle: const TextStyle(color: Colors.grey),
-                prefixIcon: const Icon(Icons.local_hospital, color: Colors.greenAccent),
-                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            onPressed: () {
-              if (fromController.text.isNotEmpty && toController.text.isNotEmpty) {
-                Navigator.pop(context);
-                store.requestPriority(fromController.text.trim(), toController.text.trim());
-              }
-            },
-            child: const Text("ACTIVATE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
+    // Location is handled by external GPS modules, so we bypass manual user input
+    // and immediately activate the priority sequence.
+    store.requestPriority("Live GPS Tracking", "Assigned Hospital");
   }
 
   // Helper method to color-code the priority dropdown
   Color _getPriorityColor(String priority) {
     switch (priority) {
       case 'Critical': return const Color(0xFFFF4D4D); // Red
-      case 'Severe': return const Color(0xFFFF9800);   // Orange
-      case 'Moderate': return const Color(0xFFFFEB3B); // Yellow
       case 'Non-Critical': return const Color(0xFF00CC66); // Green
       default: return Colors.white;
     }

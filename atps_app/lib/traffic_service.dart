@@ -15,7 +15,7 @@ class TrafficService {
     } else {
       // 2. If running on a Physical Phone or Android Emulator
       // Put your computer's EXACT IPv4 address here. 
-      return "http://172.30.30.79:5000/api"; 
+      return "http://10.83.235.178:5000/api"; 
     }
   }
 
@@ -109,11 +109,55 @@ class TrafficService {
 }
 
   // ================= TRAFFIC METHODS =================
-  Future<void> requestGreen(String unitId) async {
-    await Future.delayed(const Duration(seconds: 2));
+  Future<Map<String, dynamic>> requestGreen(String unitId, String driverName, String start, String destination, String phone) async {
+    if (!useRealServer) {
+      await Future.delayed(const Duration(seconds: 2));
+      return {"success": true};
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse("$serverUrl/request_priority"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "unit_id": unitId,
+          "driver_name": driverName,
+          "start": start,
+          "destination": destination,
+          "phone": phone
+        }),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      print("requestGreen error: $e");
+      return {"success": false};
+    }
   }
 
-  Future<void> resetSignal() async {
+  Future<void> resetSignal(String unitId) async {
+    // Optional: in a real implementation we could call an endpoint to mark the request as COMPLETED or similar.
     await Future.delayed(const Duration(seconds: 1));
+  }
+
+  Future<bool> updateRequestStatus(String requestId, String status) async {
+    if (!useRealServer) {
+      await Future.delayed(const Duration(seconds: 1));
+      return true;
+    }
+    
+    try {
+      final response = await http.post(
+        Uri.parse("$serverUrl/admin/update_status"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "request_id": requestId,
+          "status": status,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print("updateRequestStatus error: $e");
+      return false;
+    }
   }
 }

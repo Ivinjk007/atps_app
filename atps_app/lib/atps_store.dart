@@ -39,12 +39,12 @@ late final availableUnitsCount = computed(() {
               .where((req) =>
                   req['status'] == 'APPROVED')
               .length);
-      Future<void> fetchRegisteredUnits() async {
-  isLoading.value = true;
+      Future<void> fetchRegisteredUnits({bool hideLoading = false}) async {
+  if (!hideLoading) isLoading.value = true;
 
   try {
     final response = await http.get(
-      Uri.parse("http://172.30.30.79:5000/api/units"),
+      Uri.parse("${TrafficService.serverUrl}/units"),
     );
 
     if (response.statusCode == 200) {
@@ -53,11 +53,39 @@ late final availableUnitsCount = computed(() {
           List<Map<String, dynamic>>.from(data);
     }
   } catch (e) {
-    print("Fetch error: $e");
+    print("Fetch error: \$e");
   } finally {
-    isLoading.value = false;
+    if (!hideLoading) isLoading.value = false;
   }
-}   
+}
+
+  Future<void> fetchEmergencyRequests({bool hideLoading = false}) async {
+    if (!hideLoading) isLoading.value = true;
+
+    try {
+      final response = await http.get(
+        Uri.parse("${TrafficService.serverUrl}/admin/requests"),
+      );
+
+      if (response.statusCode == 200) {
+        List<dynamic> data = jsonDecode(response.body);
+        
+        final currentRequests = data.map((req) => {
+          "id": req["id"].toString(),
+          "unit": req["unit_id"],
+          "location": req["destination"] ?? "Unknown",
+          "status": req["status"],
+          "eta": "Unknown",
+        }).toList();
+
+        emergencyRequests.value = List<Map<String, dynamic>>.from(currentRequests);
+      }
+    } catch (e) {
+      print("Fetch emergency requests error: \$e");
+    } finally {
+      if (!hideLoading) isLoading.value = false;
+    }
+  }
 
   // =========================
   // DRIVER STATE
@@ -66,6 +94,8 @@ late final availableUnitsCount = computed(() {
   final status = signal("RED");
   final isLoading = signal(false);
   final unitId = signal("AMB-042");
+  final driverName = signal("");
+  final driverPhone = signal("");
   final eta = signal("8:45");
 
   // =========================
@@ -76,12 +106,31 @@ late final availableUnitsCount = computed(() {
 
 final emergencyRequests = signal<List<Map<String, dynamic>>>([]);
 
-final trafficSignals = listSignal<Map<String, dynamic>>([
-  {"id": "S1", "name": "Vyttila Junction", "status": "RED", "online": true},
-  {"id": "S2", "name": "Kaloor Stadium Jn", "status": "GREEN", "online": true},
-  {"id": "S3", "name": "Edappally Toll", "status": "RED", "online": true},
-  {"id": "S4", "name": "Palarivattom Jn", "status": "RED", "online": false},
-]);
+final trafficSignals = listSignal<Map<String, dynamic>>([]);
+
+  Future<void> fetchSignals({bool hideLoading = false}) async {
+    try {
+      final response = await http.get(Uri.parse("${TrafficService.serverUrl}/admin/signals"));
+      
+      if (response.statusCode == 200) {
+        List<dynamic> data = jsonDecode(response.body);
+        final formattedSignals = data.map((sig) => {
+          "id": sig["junction_id"],
+          "name": sig["junction_name"],
+          "status": sig["current_status"],
+          "lat": sig["lat"],
+          "lon": sig["lon"],
+          "battery_level": sig["battery_level"] ?? 100,
+          "last_updated": sig["last_updated"],
+          // Set online to true if recently updated. We can default it to true for now since ESP32 will ping
+          "online": true, 
+        }).toList();
+        trafficSignals.value = List<Map<String, dynamic>>.from(formattedSignals);
+      }
+    } catch (e) {
+      print("Fetch signals error: \$e");
+    }
+  }
 
   // =========================
   // COMPUTED VALUES
@@ -109,12 +158,12 @@ final trafficSignals = listSignal<Map<String, dynamic>>([
     if (status.value == "GREEN") return;
 
     isLoading.value = true;
-    await _api.requestGreen(unitId.value);
+    final res = await _api.requestGreen(unitId.value, driverName.value, fromLocation, toLocation, driverPhone.value);
     
-    // Auto-update active emergency cases
+    // Auto-update active emergency cases locally for instant feedback
     final currentRequests = List<Map<String, dynamic>>.from(emergencyRequests.value);
     currentRequests.add({
-      "id": DateTime.now().millisecondsSinceEpoch.toString(),
+      "id": res['success'] == true ? res['request_id'] : DateTime.now().millisecondsSinceEpoch.toString(),
       "unit": unitId.value,
       "location": "$fromLocation ➔ $toLocation",
       "status": "APPROVED",
@@ -128,13 +177,14 @@ final trafficSignals = listSignal<Map<String, dynamic>>([
 
   Future<void> reset() async {
     isLoading.value = true;
-    await _api.resetSignal();
+    await _api.resetSignal(unitId.value);
 
-    // Auto-remove from active emergencies
+    // Auto-remove from active emergencies locally
     final currentRequests = List<Map<String, dynamic>>.from(emergencyRequests.value);
     for (var req in currentRequests) {
       if (req['unit'] == unitId.value && req['status'] == 'APPROVED') {
         req['status'] = 'COMPLETED';
+        _api.updateRequestStatus(req['id'], 'COMPLETED');
       }
     }
     emergencyRequests.value = currentRequests;
@@ -151,6 +201,7 @@ void denyRequest(String requestId) {
   
   if (index != -1) {
     currentRequests[index]['status'] = 'COMPLETED';
+    _api.updateRequestStatus(requestId, 'COMPLETED');
     emergencyRequests.value = currentRequests; // This triggers the UI refresh
   }
 }
@@ -172,7 +223,7 @@ Future<void> toggleSignalManual(String junctionId) async {
 
     // Send command to Flask backend
     await http.post(
-      Uri.parse("http://172.30.30.79:5000/api/admin/signal_override"),
+      Uri.parse("${TrafficService.serverUrl}/admin/signal_override"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         "junction_id": junctionId,
@@ -195,6 +246,8 @@ Future<void> toggleSignalManual(String junctionId) async {
     if (result['success'] == true) {
       if (result['user'] != null && result['user']['unit_id'] != null) {
         unitId.value = result['user']['unit_id'];
+        driverName.value = result['user']['name'] ?? "";
+        driverPhone.value = result['user']['phone'] ?? "";
       }
       return true;
     } else {
@@ -272,7 +325,7 @@ Future<bool> addNewSignal(
 ) async {
   try {
     final response = await http.post(
-      Uri.parse("http://172.30.30.79:5000/api/admin/add_signal"),
+      Uri.parse("${TrafficService.serverUrl}/admin/add_signal"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         "junction_id": junctionId,

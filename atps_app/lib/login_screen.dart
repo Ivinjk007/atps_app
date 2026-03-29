@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:signals_flutter/signals_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'atps_store.dart';
 import 'driver_dashboard.dart';
 import 'admin_dashboard.dart';
@@ -25,8 +26,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   final store = AtpsStore(); 
   
-  // State for the checkbox
-  bool _stayLoggedIn = false; 
+  // Default persistent login, no checkbox state needed
 
   @override
   void initState() {
@@ -58,10 +58,14 @@ class _LoginScreenState extends State<LoginScreen> {
     bool success = await store.login(username, password, widget.role);
 
     if (success && mounted) {
-      // Save session if checkbox is checked
-      if (_stayLoggedIn) {
-        AppSession.loggedInRole = widget.role;
-      }
+      // Unconditionally save session 
+      AppSession.loggedInRole = widget.role;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('loggedInRole', widget.role);
+      await prefs.setString('unitId', store.unitId.value);
+      await prefs.setString('driverName', store.driverName.value);
+      await prefs.setString('driverPhone', store.driverPhone.value);
+      
       _navigateToDashboard();
     } else if (mounted) {
       _showError("Invalid Credentials or Access Denied");
@@ -117,24 +121,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 _buildTextField("Password", Icons.lock, _passwordController, isPassword: true),
                 const SizedBox(height: 10),
 
-                // THE NEW "STAY LOGGED IN" CHECKBOX
-                Theme(
-                  data: ThemeData(unselectedWidgetColor: Colors.grey),
-                  child: CheckboxListTile(
-                    title: const Text("Stay Logged In", style: TextStyle(color: Colors.white70)),
-                    value: _stayLoggedIn,
-                    activeColor: isAdmin ? Colors.blueAccent : Colors.redAccent,
-                    checkColor: Colors.white,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    contentPadding: EdgeInsets.zero,
-                    onChanged: (bool? value) {
-                      setState(() {
-                        _stayLoggedIn = value ?? false;
-                      });
-                    },
-                  ),
-                ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 10),
 
                 Watch((context) {
                   return SizedBox(

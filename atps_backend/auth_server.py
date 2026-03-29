@@ -201,6 +201,10 @@ def signal_override():
 def get_all_signals():
     try:
         signals = list(signals_collection.find({}, {"_id": 0}).sort("junction_id", 1))
+        for s in signals:
+            s['battery_level'] = s.get('battery_level', 100)
+            if 'last_updated' not in s:
+                s['last_updated'] = datetime.datetime.utcnow()
         return jsonify(signals), 200
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
@@ -208,11 +212,10 @@ def get_all_signals():
 @app.route('/api/admin/requests', methods=['GET'])
 def get_active_requests():
     try:
-        time_limit = datetime.datetime.utcnow() - datetime.timedelta(hours=24)
+        time_limit = datetime.datetime.utcnow() - datetime.timedelta(days=7)
 
         requests_query = list(logs_collection.find({
-            "timestamp": {"$gt": time_limit},
-            "status": {"$ne": "COMPLETED"}
+            "timestamp": {"$gt": time_limit}
         }, {
             "_id": 1,
             "unit_id": 1,
@@ -295,6 +298,10 @@ def login():
 def get_units():
     # Returns all drivers with their contact info for the Admin Dashboard
     drivers = list(users_collection.find({"role": "DRIVER"}, {"_id": 0, "name": 1, "unit_id": 1, "phone": 1}))
+    for d in drivers:
+        d['battery_level'] = d.get('battery_level', 100)
+        if 'last_updated' not in d:
+            d['last_updated'] = datetime.datetime.utcnow()
     return jsonify(drivers), 200
 
 # ================= RUN SERVER =================
