@@ -4,6 +4,8 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'atps_store.dart';
 import 'login_screen.dart'; 
 import 'main.dart';
+import 'signal_control_dashboard.dart';
+import 'dart:async';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -14,11 +16,27 @@ class AdminDashboard extends StatefulWidget {
 
 class _AdminDashboardState extends State<AdminDashboard> {
   final AtpsStore store = AtpsStore();
+  Timer? _pollingTimer;
 
   @override
   void initState() {
     super.initState();
     store.fetchRegisteredUnits();
+    store.fetchSignals();
+    store.fetchEmergencyRequests();
+    
+    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (mounted) {
+        store.fetchSignals(hideLoading: true);
+        store.fetchEmergencyRequests(hideLoading: true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    super.dispose();
   }
 
   void _showAddSignalDialog(BuildContext context) {
@@ -234,11 +252,19 @@ Row(
     const SizedBox(width: 16),
     // --- CONTROLLED SIGNALS (Manual Junction Overrides) ---
     Expanded(
-      child: _buildStatCard(
-        "Controlled Signals",
-        "28", // Updated to a realistic count for Kochi junctions
-        Colors.blueAccent,
-        LucideIcons.activity,
+      child: GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SignalControlDashboard()),
+          );
+        },
+        child: Watch((_) => _buildStatCard(
+          "Controlled Signals",
+          "${store.trafficSignals.length}", 
+          Colors.blueAccent,
+          LucideIcons.activity,
+        )),
       ),
     ),
   ],
@@ -267,30 +293,6 @@ const SizedBox(height: 32),
               }),
 
               const SizedBox(height: 32),
-
-
-            // 3. TRAFFIC SIGNAL GRID
-            _sectionHeader("Traffic Signal Manual Override"),
-            const SizedBox(height: 16),
-
-            Watch((context) {
-              return GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate:
-                    const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 1.3,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                ),
-                itemCount: store.trafficSignals.length,
-                itemBuilder: (context, index) {
-                  final sig = store.trafficSignals[index];
-                  return _buildSignalCard(sig, store);
-                },
-              );
-            }),
           ],
         ),
       ),
@@ -503,6 +505,7 @@ const SizedBox(height: 32),
   );
 }
 
+
 // Helper widget for clean rows
 Widget _detailRow(IconData icon, String label, String value) {
   return Row(
@@ -548,67 +551,70 @@ Widget _detailRow(IconData icon, String label, String value) {
             );
           }
 
-          return ListView.builder(
-            shrinkWrap: true,
-            itemCount: completedReqs.length,
-            itemBuilder: (context, index) {
-              // Show newest first
-              final req = completedReqs[completedReqs.length - 1 - index];
-              final unitId = req['unit'];
+          return Container(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: completedReqs.length,
+              itemBuilder: (context, index) {
+                // Show newest first
+                final req = completedReqs[completedReqs.length - 1 - index];
+                final unitId = req['unit'];
 
-              // Attempt to find driver name
-              final unitsList = store.registeredUnits.value;
-              final userMap = unitsList.firstWhere(
-                (u) => u['unit_id'] == unitId, 
-                orElse: () => <String, dynamic>{}
-              );
-              final name = userMap['name'] ?? "Unknown Driver";
+                // Attempt to find driver name
+                final unitsList = store.registeredUnits.value;
+                final userMap = unitsList.firstWhere(
+                  (u) => u['unit_id'] == unitId, 
+                  orElse: () => <String, dynamic>{}
+                );
+                final name = userMap['name'] ?? "Unknown Driver";
 
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.orangeAccent.withValues(alpha: 0.3),
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.orangeAccent.withValues(alpha: 0.3),
+                    ),
                   ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          unitId ?? "Unknown Unit",
-                          style: const TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.orangeAccent.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            unitId ?? "Unknown Unit",
+                            style: const TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 16),
                           ),
-                          child: const Text(
-                            "RESOLVED",
-                            style: TextStyle(
-                              color: Colors.orangeAccent,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.orangeAccent.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text(
+                              "RESOLVED",
+                              style: TextStyle(
+                                color: Colors.orangeAccent,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const Divider(color: Colors.white10, height: 20),
-                    _detailRow(Icons.person, "Driver", name),
-                    const SizedBox(height: 8),
-                    _detailRow(Icons.route, "Path Taken", req['location'] ?? "Unknown"),
-                  ],
-                ),
-              );
-            },
+                        ],
+                      ),
+                      const Divider(color: Colors.white10, height: 20),
+                      _detailRow(Icons.person, "Driver", name),
+                      const SizedBox(height: 8),
+                      _detailRow(Icons.route, "Path Taken", req['location'] ?? "Unknown"),
+                    ],
+                  ),
+                );
+              },
+            ),
           );
         }),
       ),
@@ -735,78 +741,7 @@ Widget _detailRow(IconData icon, String label, String value) {
     );
   }
 
-  // ---------- SIGNAL CARD ----------
-  Widget _buildSignalCard(Map<String, dynamic> sig, AtpsStore store) {
-    final bool isGreen = sig['status'] == 'GREEN';
-    final bool isOnline = sig['online'];
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF151B25),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isGreen
-              ? Colors.green.withValues(alpha: 0.3)
-              : Colors.transparent,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment:
-                MainAxisAlignment.spaceBetween,
-            children: [
-              Icon(
-                Icons.traffic,
-                color: isOnline
-                    ? (isGreen ? Colors.green : Colors.red)
-                    : Colors.grey,
-              ),
-              Transform.scale(
-                scale: 0.8,
-                child: Switch(
-                  value: isGreen,
-                  activeColor: Colors.green,
-                  inactiveTrackColor:
-                      Colors.red.withValues(alpha: 0.3),
-                  onChanged: isOnline
-                      ? (_) =>
-                          store.toggleSignalManual(sig['id'])
-                      : null,
-                ),
-              )
-            ],
-          ),
-          const Spacer(),
-          Text(
-            sig['name'],
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              fontSize: 13,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            isOnline
-                ? (isGreen ? "GREEN" : "RED")
-                : "OFFLINE",
-            style: TextStyle(
-              color: isOnline
-                  ? (isGreen ? Colors.green : Colors.red)
-                  : Colors.grey,
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // Removed deprecated _buildSignalCard inline UI component
 
   // ---------- STAT CARD ----------
   Widget _buildStatCard(

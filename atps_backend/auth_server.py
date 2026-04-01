@@ -4,6 +4,8 @@ from flask_cors import CORS
 import datetime
 import math
 from bson import ObjectId
+import threading
+import time
 
 # ================= APP SETUP =================
 app = Flask(__name__)
@@ -174,27 +176,44 @@ def update_status():
     )
     return jsonify({"success": True, "message": f"Status updated to {new_status}"}), 200
 
+@app.route('/api/admin/delete_request', methods=['POST'])
+def delete_request():
+    data = request.json
+    req_id = data.get('request_id')
+    logs_collection.delete_one({"_id": ObjectId(req_id)})
+    return jsonify({"success": True, "message": "False alarm deleted"}), 200
+
 @app.route('/api/admin/signal_override', methods=['POST'])
 def signal_override():
-
     data = request.json
     junction_id = data.get('junction_id')
-    color = data.get('color')   # "GREEN" or "RED"
+    color = data.get('color')   # "GREEN", "RED", "YELLOW", or "AUTO"
+    now_utc = datetime.datetime.utcnow()
 
-    signals_collection.update_one(
-        {"junction_id": junction_id},
-        {"$set": {
-            "mode": "MANUAL",
-            "current_status": color,
-            "manual_color": color,
-            "last_updated": datetime.datetime.utcnow()
-        }},
-        upsert=False
-    )
+    if color == "AUTO":
+        signals_collection.update_one(
+            {"junction_id": junction_id},
+            {"$set": {
+                "mode": "AUTO",
+                "last_updated": now_utc
+            }}
+        )
+        msg_mode = "AUTO"
+    else:
+        signals_collection.update_one(
+            {"junction_id": junction_id},
+            {"$set": {
+                "mode": "MANUAL",
+                "current_status": color,
+                "manual_color": color,
+                "last_updated": now_utc
+            }}
+        )
+        msg_mode = f"{color} in MANUAL mode"
 
     return jsonify({
         "success": True,
-        "message": f"Signal {junction_id} forced to {color} in MANUAL mode"
+        "message": f"Signal {junction_id} set to {msg_mode}"
     }), 200
 
 @app.route('/api/admin/signals', methods=['GET'])
@@ -203,8 +222,11 @@ def get_all_signals():
         signals = list(signals_collection.find({}, {"_id": 0}).sort("junction_id", 1))
         for s in signals:
             s['battery_level'] = s.get('battery_level', 100)
-            if 'last_updated' not in s:
-                s['last_updated'] = datetime.datetime.utcnow()
+            lu = s.get('last_updated', datetime.datetime.utcnow())
+            if isinstance(lu, datetime.datetime):
+                s['last_updated'] = lu.isoformat()
+            else:
+                s['last_updated'] = str(lu)
         return jsonify(signals), 200
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
@@ -212,7 +234,7 @@ def get_all_signals():
 @app.route('/api/admin/requests', methods=['GET'])
 def get_active_requests():
     try:
-        time_limit = datetime.datetime.utcnow() - datetime.timedelta(days=7)
+        time_limit = datetime.datetime.utcnow() - datetime.timedelta(days=15)
 
         requests_query = list(logs_collection.find({
             "timestamp": {"$gt": time_limit}
@@ -304,7 +326,47 @@ def get_units():
             d['last_updated'] = datetime.datetime.utcnow()
     return jsonify(drivers), 200
 
+# ================= DAEMON THREAD FOR TRAFFIC LIGHTS =================
+def traffic_light_loop():
+    while True:
+        try:
+            now = datetime.datetime.utcnow()
+            signals = signals_collection.find({"mode": "AUTO"})
+            for sig in signals:
+                current_status = sig.get('current_status', 'RED')
+                last_updated = sig.get('last_updated', now)
+                
+                # Make sure last_updated is a datetime object, fallback if missing
+                if not isinstance(last_updated, datetime.datetime):
+                    last_updated = now
+                
+                elapsed = (now - last_updated).total_seconds()
+                new_status = current_status
+                
+                if current_status == "RED" and elapsed >= 60:
+                    new_status = "YELLOW"
+                elif current_status == "YELLOW" and elapsed >= 20:
+                    new_status = "GREEN"
+                elif current_status == "GREEN" and elapsed >= 60:
+                    new_status = "RED"
+                
+                if new_status != current_status:
+                    signals_collection.update_one(
+                        {"_id": sig["_id"]},
+                        {"$set": {
+                            "current_status": new_status,
+                            "last_updated": now
+                        }}
+                    )
+        except Exception as e:
+            print(f"Traffic Loop Error: {e}")
+            
+        time.sleep(2)
+
 # ================= RUN SERVER =================
 if __name__ == '__main__':
+    # Start background traffic cycle
+    threading.Thread(target=traffic_light_loop, daemon=True).start()
+    
     # host='0.0.0.0' allows external ESP32 and mobile app access
     app.run(host='0.0.0.0', port=5000, debug=True)

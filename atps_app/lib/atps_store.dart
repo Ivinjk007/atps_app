@@ -118,6 +118,7 @@ final trafficSignals = listSignal<Map<String, dynamic>>([]);
           "id": sig["junction_id"],
           "name": sig["junction_name"],
           "status": sig["current_status"],
+          "mode": sig["mode"] ?? "AUTO",
           "lat": sig["lat"],
           "lon": sig["lon"],
           "battery_level": sig["battery_level"] ?? 100,
@@ -175,19 +176,29 @@ final trafficSignals = listSignal<Map<String, dynamic>>([]);
     isLoading.value = false;
   }
 
-  Future<void> reset() async {
+  Future<void> reset({bool isFalseAlarm = false}) async {
     isLoading.value = true;
     await _api.resetSignal(unitId.value);
 
     // Auto-remove from active emergencies locally
     final currentRequests = List<Map<String, dynamic>>.from(emergencyRequests.value);
+    List<Map<String, dynamic>> updatedRequests = [];
+    
     for (var req in currentRequests) {
       if (req['unit'] == unitId.value && req['status'] == 'APPROVED') {
-        req['status'] = 'COMPLETED';
-        _api.updateRequestStatus(req['id'], 'COMPLETED');
+        if (isFalseAlarm) {
+           _api.deleteRequest(req['id']);
+           // Do not add to updatedRequests so it disappears locally
+        } else {
+           req['status'] = 'COMPLETED';
+           _api.updateRequestStatus(req['id'], 'COMPLETED');
+           updatedRequests.add(req);
+        }
+      } else {
+        updatedRequests.add(req);
       }
     }
-    emergencyRequests.value = currentRequests;
+    emergencyRequests.value = updatedRequests;
 
     status.value = "RED";
     isLoading.value = false;
@@ -206,7 +217,7 @@ void denyRequest(String requestId) {
   }
 }
 
-Future<void> toggleSignalManual(String junctionId) async {
+Future<void> toggleSignalManual(String junctionId, String newColor) async {
   try {
     final index = trafficSignals.value
         .indexWhere((element) => element['id'] == junctionId);
@@ -215,11 +226,16 @@ Future<void> toggleSignalManual(String junctionId) async {
 
     var sig = Map<String, dynamic>.from(trafficSignals.value[index]);
 
-    String newColor = sig['status'] == 'RED' ? 'GREEN' : 'RED';
-
-    // Update UI immediately
-    sig['status'] = newColor;
+    // Update UI immediately (temporarily assume success)
+    if (newColor == 'AUTO') {
+      sig['mode'] = 'AUTO';
+      // Do not artificially change status, backend polling loop will do it next tick
+    } else {
+      sig['mode'] = 'MANUAL';
+      sig['status'] = newColor;
+    }
     trafficSignals.value[index] = sig;
+    trafficSignals.value = List.from(trafficSignals.value); // Trigger signals reactivity
 
     // Send command to Flask backend
     await http.post(
@@ -227,7 +243,7 @@ Future<void> toggleSignalManual(String junctionId) async {
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         "junction_id": junctionId,
-        "desired_color": newColor
+        "color": newColor
       }),
     );
 
@@ -340,6 +356,8 @@ Future<bool> addNewSignal(
     );
 
     if (response.statusCode == 201) {
+      // Refresh the backend signals strictly
+      await fetchSignals(hideLoading: true);
       return true;
     } else {
       print("Add signal failed: ${response.body}");

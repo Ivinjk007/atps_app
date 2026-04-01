@@ -160,4 +160,23 @@ class TrafficService {
       return false;
     }
   }
+
+  Future<bool> deleteRequest(String requestId) async {
+    if (!useRealServer) {
+      await Future.delayed(const Duration(seconds: 1));
+      return true;
+    }
+    
+    try {
+      final response = await http.post(
+        Uri.parse("$serverUrl/admin/delete_request"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"request_id": requestId}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print("deleteRequest error: $e");
+      return false;
+    }
+  }
 }

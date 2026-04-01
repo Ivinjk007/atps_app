@@ -207,15 +207,52 @@ class _DriverDashboardState extends State<DriverDashboard> {
               ),
             ),
 
-            const SizedBox(height: 20),
-            
-            TextButton(
-              onPressed: store.reset,
-              child: const Text(
-                "Reset Simulation",
-                style: TextStyle(color: Colors.white24, fontSize: 20),
-              ),
-            )
+            Watch((context) => Column(
+              children: [
+                if (store.status.value == "GREEN")
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(top: 20),
+                    child: ElevatedButton.icon(
+                      onPressed: () => _confirmCompletion(context),
+                      icon: const Icon(Icons.check_circle, size: 24),
+                      label: const Text(
+                        "COMPLETE JOURNEY",
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00CC66),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                const SizedBox(height: 20),
+                
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => store.reset(isFalseAlarm: true),
+                    icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent),
+                    label: const Text(
+                      "Cancel Request (False Alarm)",
+                      style: TextStyle(color: Colors.redAccent, fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.redAccent, width: 2),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            )),
           ],
         ),
       ),
@@ -238,5 +275,33 @@ class _DriverDashboardState extends State<DriverDashboard> {
       case 'Non-Critical': return const Color(0xFF00CC66); // Green
       default: return Colors.white;
     }
+  }
+
+  void _confirmCompletion(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF151B25),
+        title: const Text("Complete Journey?", style: TextStyle(color: Colors.white)),
+        content: const Text(
+          "Are you sure you want to end this emergency journey and reset signals?",
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              store.reset(isFalseAlarm: false); // Effectively completes the journey
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00CC66)),
+            child: const Text("Confirm", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -25,6 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final store = AtpsStore(); 
+  bool _obscurePassword = true;
   
   // Default persistent login, no checkbox state needed
 
@@ -158,12 +159,25 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildTextField(String label, IconData icon, TextEditingController controller, {bool isPassword = false}) {
     return TextField(
       controller: controller,
-      obscureText: isPassword,
+      obscureText: isPassword ? _obscurePassword : false,
       style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: const TextStyle(color: Colors.grey),
         prefixIcon: Icon(icon, color: Colors.grey),
+        suffixIcon: isPassword
+            ? IconButton(
+                icon: Icon(
+                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                  color: Colors.grey,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  });
+                },
+              )
+            : null,
         filled: true,
         fillColor: const Color(0xFF0B0E14),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
