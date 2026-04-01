@@ -5,7 +5,7 @@
 
 
     <application
-        android:label="atps_app"
+        android:label="Atps"
         android:name="${applicationName}"
         android:usesCleartextTraffic="true"
         android:icon="@mipmap/ic_launcher">

@@ -40,7 +40,7 @@ class AtpsApp extends StatelessWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'APTSC Traffic Control',
+      title: 'ATPS Traffic Control',
       theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF0B0E14),
@@ -67,7 +67,7 @@ class LandingScreen extends StatelessWidget {
             Icon(LucideIcons.siren, color: Color(0xFFFF4D4D)),
             SizedBox(width: 10),
             Text(
-              "APTSC",
+              "ATPS",
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
             ),
           ],
