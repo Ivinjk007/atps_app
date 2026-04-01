@@ -6,6 +6,7 @@ import math
 from bson import ObjectId
 import threading
 import time
+import os
 
 # ================= APP SETUP =================
 app = Flask(__name__)
@@ -13,6 +14,11 @@ CORS(app)
 
 # ================= DATABASE CONNECTION =================
 MONGO_URI = "mongodb+srv://admin:admin123@cluster0.oiagpxv.mongodb.net/?appName=Cluster0"
+
+@app.route('/')
+def home():
+    return jsonify({"message": "ATPS Backend is running"}), 200
+
 
 try:
     client = MongoClient(MONGO_URI)
@@ -368,5 +374,6 @@ if __name__ == '__main__':
     # Start background traffic cycle
     threading.Thread(target=traffic_light_loop, daemon=True).start()
     
-    # host='0.0.0.0' allows external ESP32 and mobile app access
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # Render assigns a dynamic port via the PORT environment variable
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)

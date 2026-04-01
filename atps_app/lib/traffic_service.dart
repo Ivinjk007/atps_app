@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart'; // REQUIRED FOR kIsWeb
 import 'package:http/http.dart' as http;
 
 class TrafficService {
@@ -9,14 +8,7 @@ class TrafficService {
 
   //SMART URL SELECTOR 
   static String get serverUrl {
-    if (kIsWeb) {
-      // 1. If running on Chrome (Web) on your computer
-      return "http://127.0.0.1:5000/api";
-    } else {
-      // 2. If running on a Physical Phone or Android Emulator
-      // Put your computer's EXACT IPv4 address here. 
-      return "http://10.83.235.178:5000/api"; 
-    }
+    return "https://atps-app-1.onrender.com/api";
   }
 
   // ================= LOGIN =================
