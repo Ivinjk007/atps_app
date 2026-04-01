@@ -276,17 +276,25 @@ const SizedBox(height: 32),
               const SizedBox(height: 16),
 
               Watch((context) {
-                final requests = store.emergencyRequests.value;
+                final allRequests = store.emergencyRequests.value;
 
-                if (requests.isEmpty) {
+                final activeRequests = allRequests.where((req) => req['status'] == 'APPROVED' || req['status'] == 'PENDING').toList();
+                final completedRequests = allRequests.where((req) => req['status'] == 'COMPLETED' || req['status'] == 'DENIED').toList();
+
+                final displayedRequests = [
+                  ...activeRequests,
+                  ...completedRequests.take(3)
+                ];
+
+                if (displayedRequests.isEmpty) {
                   return const Text(
-                    "No active requests",
+                    "No active or recent requests",
                     style: TextStyle(color: Colors.grey),
                   );
                 }
 
                 return Column(
-                  children: requests
+                  children: displayedRequests
                       .map((req) => _buildRequestCard(req, store))
                       .toList(),
                 );
@@ -509,11 +517,21 @@ const SizedBox(height: 32),
 // Helper widget for clean rows
 Widget _detailRow(IconData icon, String label, String value) {
   return Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Icon(icon, size: 14, color: Colors.grey),
+      Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Icon(icon, size: 14, color: Colors.grey),
+      ),
       const SizedBox(width: 8),
       Text("$label: ", style: const TextStyle(color: Colors.grey, fontSize: 13)),
-      Text(value, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+      Expanded(
+        child: Text(
+          value, 
+          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+          softWrap: true,
+        ),
+      ),
     ],
   );
   }
@@ -529,9 +547,12 @@ Widget _detailRow(IconData icon, String label, String value) {
         children: const [
           Icon(Icons.history, color: Colors.orangeAccent),
           SizedBox(width: 10),
-          Text(
-            "Emergency Request History",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          Expanded(
+            child: Text(
+              "Emergency Request History",
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),

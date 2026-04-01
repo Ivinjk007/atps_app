@@ -217,40 +217,50 @@ void denyRequest(String requestId) {
   }
 }
 
-Future<void> toggleSignalManual(String junctionId, String newColor) async {
-  try {
-    final index = trafficSignals.value
-        .indexWhere((element) => element['id'] == junctionId);
+  Future<void> toggleSignalManual(String junctionId, String newColor) async {
+    try {
+      final index = trafficSignals.value
+          .indexWhere((element) => element['id'] == junctionId);
 
-    if (index == -1) return;
+      if (index == -1) return;
 
-    var sig = Map<String, dynamic>.from(trafficSignals.value[index]);
+      var sig = Map<String, dynamic>.from(trafficSignals.value[index]);
+      final oldMode = sig['mode'];
+      final oldStatus = sig['status'];
 
-    // Update UI immediately (temporarily assume success)
-    if (newColor == 'AUTO') {
-      sig['mode'] = 'AUTO';
-      // Do not artificially change status, backend polling loop will do it next tick
-    } else {
-      sig['mode'] = 'MANUAL';
-      sig['status'] = newColor;
+      // Update UI immediately (optimistic UI update)
+      if (newColor == 'AUTO') {
+        sig['mode'] = 'AUTO';
+      } else {
+        sig['mode'] = 'MANUAL';
+        sig['status'] = newColor;
+      }
+      trafficSignals.value[index] = sig;
+      trafficSignals.value = List.from(trafficSignals.value); // Trigger signals reactivity
+
+      // Send command to Flask backend
+      final response = await http.post(
+        Uri.parse("${TrafficService.serverUrl}/admin/signal_override"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "junction_id": junctionId,
+          "color": newColor
+        }),
+      );
+
+      if (response.statusCode != 200) {
+        print("Backend failed to process override. Reverting UI.");
+        sig['mode'] = oldMode;
+        sig['status'] = oldStatus;
+        trafficSignals.value[index] = sig;
+        trafficSignals.value = List.from(trafficSignals.value);
+      }
+
+    } catch (e) {
+      print("Signal override network error: $e");
+      // Optionally could implement flutter toast/snackbar here but print is sufficient for debugging
     }
-    trafficSignals.value[index] = sig;
-    trafficSignals.value = List.from(trafficSignals.value); // Trigger signals reactivity
-
-    // Send command to Flask backend
-    await http.post(
-      Uri.parse("${TrafficService.serverUrl}/admin/signal_override"),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "junction_id": junctionId,
-        "color": newColor
-      }),
-    );
-
-  } catch (e) {
-    print("Signal override error: $e");
   }
-}
   // --- ACTIONS: AUTHENTICATION ---
 
   // 1. Login

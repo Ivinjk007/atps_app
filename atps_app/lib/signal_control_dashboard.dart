@@ -78,12 +78,15 @@ class _SignalControlDashboardState extends State<SignalControlDashboard> {
             );
           }
 
+          double screenWidth = MediaQuery.of(context).size.width;
+          int columns = screenWidth > 600 ? 2 : 1;
+
           return GridView.builder(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columns,
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
-              mainAxisExtent: 200,
+              mainAxisExtent: 220, // slightly taller for bigger buttons
             ),
             itemCount: signals.length,
             itemBuilder: (context, index) {
@@ -206,13 +209,13 @@ class _SignalControlDashboardState extends State<SignalControlDashboard> {
                 GestureDetector(
                   onTap: () => store.toggleSignalManual(sig['id'], "AUTO"),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
                       color: mode == 'AUTO' ? Colors.blueAccent : Colors.transparent,
                       border: Border.all(color: Colors.blueAccent),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text("AUTO", style: TextStyle(color: mode == 'AUTO' ? Colors.white : Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                    child: Text("AUTO", style: TextStyle(color: mode == 'AUTO' ? Colors.white : Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
                 )
               ],
@@ -227,8 +230,8 @@ class _SignalControlDashboardState extends State<SignalControlDashboard> {
     return GestureDetector(
       onTap: () => store.toggleSignalManual(id, targetColor),
       child: Container(
-        width: 32,
-        height: 32,
+        width: 48,
+        height: 48,
         decoration: BoxDecoration(
           color: isActive ? displayColor : displayColor.withValues(alpha: 0.1),
           shape: BoxShape.circle,
