@@ -40,13 +40,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   void _showAddSignalDialog(BuildContext context) {
-  final _idController = TextEditingController();
-  final _nameController = TextEditingController();
-  final _latController = TextEditingController();
-  final _lonController = TextEditingController();
-  final _espController = TextEditingController();
-  final _radiusController = TextEditingController(text: "500");
-  String _selectedMode = 'AUTO';
+  final idController = TextEditingController();
+  final nameController = TextEditingController();
+  final latController = TextEditingController();
+  final lonController = TextEditingController();
+  final espController = TextEditingController();
+  final radiusController = TextEditingController(text: "500");
+  String selectedMode = 'AUTO';
 
   showDialog(
     context: context,
@@ -62,7 +62,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
-                controller: _idController,
+                controller: idController,
                 style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(
                   labelText: "Junction ID (e.g. J-01)",
@@ -70,7 +70,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
               ),
               TextField(
-                controller: _nameController,
+                controller: nameController,
                 style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(
                   labelText: "Junction Name",
@@ -78,7 +78,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
               ),
               TextField(
-                controller: _latController,
+                controller: latController,
                 style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(
                   labelText: "Latitude",
@@ -86,7 +86,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
               ),
               TextField(
-                controller: _lonController,
+                controller: lonController,
                 style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(
                   labelText: "Longitude",
@@ -94,7 +94,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
               ),
               TextField(
-                controller: _espController,
+                controller: espController,
                 style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(
                   labelText: "ESP32 Controller ID",
@@ -102,7 +102,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
               ),
               TextField(
-                controller: _radiusController,
+                controller: radiusController,
                 style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(
                   labelText: "Trigger Radius (meters)",
@@ -112,7 +112,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               const SizedBox(height: 12),
               DropdownButton<String>(
                 dropdownColor: const Color(0xFF151B25),
-                value: _selectedMode,
+                value: selectedMode,
                 items: ["AUTO", "MANUAL"]
                     .map((m) => DropdownMenuItem(
                           value: m,
@@ -124,7 +124,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     .toList(),
                 onChanged: (val) {
                   setState(() {
-                    _selectedMode = val!;
+                    selectedMode = val!;
                   });
                 },
               ),
@@ -139,13 +139,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ElevatedButton(
             onPressed: () async {
               bool success = await store.addNewSignal(
-                _idController.text,
-                _nameController.text,
-                _latController.text,
-                _lonController.text,
-                _espController.text,
-                _radiusController.text,
-                _selectedMode,
+                idController.text,
+                nameController.text,
+                latController.text,
+                lonController.text,
+                espController.text,
+                radiusController.text,
+                selectedMode,
               );
 
               if (success) {

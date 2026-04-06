@@ -33,6 +33,8 @@ try:
     print("✅ Connected to ATPS Central Control Server")
 except Exception as e:
     print(f"❌ Connection Error: {e}")
+    # In-memory ambulance tracker
+ambulance_tracker = {}
 
 
 # ================= 1. ADD NEW CONTROLLED SIGNAL =================
@@ -41,17 +43,23 @@ def add_signal():
     data = request.json
 
     new_signal = {
-        "junction_id": data.get('junction_id').upper(),
-        "junction_name": data.get('junction_name'),
-        "landmark": data.get('landmark'),
-        "lat": float(data.get('lat')),
-        "lon": float(data.get('lon')),
-        "esp32_id": data.get('esp32_id'),
+        "junction_id":    data.get('junction_id').upper(),
+        "junction_name":  data.get('junction_name'),
+        "landmark":       data.get('landmark'),
+        "esp32_id":       data.get('esp32_id'),
         "trigger_radius": int(data.get('trigger_radius', 500)),
         "green_hold_time": int(data.get('green_hold_time', 30)),
-        "mode": data.get('mode', 'AUTO'),
+        "mode":           data.get('mode', 'AUTO'),
         "current_status": "RED",
-        "last_updated": datetime.datetime.utcnow()
+        "active_light":   1,
+        "manual_color":   None,
+        "last_updated":   datetime.datetime.utcnow(),
+        "lights": [
+            {"light_id": 1, "direction": "NORTH", "lat": float(data.get('lat_1', 0)), "lon": float(data.get('lon_1', 0))},
+            {"light_id": 2, "direction": "EAST",  "lat": float(data.get('lat_2', 0)), "lon": float(data.get('lon_2', 0))},
+            {"light_id": 3, "direction": "SOUTH", "lat": float(data.get('lat_3', 0)), "lon": float(data.get('lon_3', 0))},
+            {"light_id": 4, "direction": "WEST",  "lat": float(data.get('lat_4', 0)), "lon": float(data.get('lon_4', 0))},
+        ]
     }
 
     if signals_collection.find_one({"junction_id": new_signal['junction_id']}):
@@ -59,7 +67,6 @@ def add_signal():
 
     signals_collection.insert_one(new_signal)
     return jsonify({"success": True, "message": "Signal added successfully"}), 201
-
 # ================= HELPER: DISTANCE CALCULATION =================
 def calculate_distance(lat1, lon1, lat2, lon2):
     # Haversine formula to calculate distance in kilometers
@@ -73,59 +80,195 @@ def calculate_distance(lat1, lon1, lat2, lon2):
 # ================= 2. GPS TRACKING & AUTO-PRIORITY =================
 @app.route('/api/update_location', methods=['POST'])
 def update_location():
-    data = request.json
-    unit_id = data.get('unit_id')
-    amb_lat = float(data.get('lat'))
-    amb_lon = float(data.get('lon'))
+    data     = request.json
+    username = data.get('username')
+    amb_lat  = float(data.get('lat'))
+    amb_lon  = float(data.get('lon'))
+    now      = datetime.datetime.utcnow()
 
-    active_signals = list(signals_collection.find({"mode": "AUTO"}))
+    # ── 1. CHECK IF DRIVER HAS ACTIVE APPROVED REQUEST ──
+    log = logs_collection.find_one(
+        {"username": username, "status": "APPROVED"},
+        sort=[("timestamp", -1)]
+    )
 
-    nearest_signal = None
-    min_dist = 999.0
-
-    for signal in active_signals:
-        dist = calculate_distance(amb_lat, amb_lon, signal['lat'], signal['lon'])
-
-        if dist < min_dist:
-            min_dist = dist
-            nearest_signal = signal
-
-    if nearest_signal:
-        radius_km = nearest_signal['trigger_radius'] / 1000
-
-        if min_dist < radius_km:
-            print(f"🚨 Priority Activated: {unit_id} near {nearest_signal['junction_name']}")
-
-            signals_collection.update_one(
-                {"junction_id": nearest_signal['junction_id']},
-                {"$set": {
-                    "current_status": "GREEN",
-                    "last_updated": datetime.datetime.utcnow()
-                }}
-            )
-
-            return jsonify({
-                "unit_id": unit_id,
-                "nearest_junction": nearest_signal['junction_name'],
-                "distance_km": round(min_dist, 2),
-                "command": "SET_GREEN",
-                "target_esp32": nearest_signal['esp32_id'],
-                "hold_time": nearest_signal['green_hold_time']
-            }), 200
-
+    if not log:
+        ambulance_tracker[username] = {
+            "lat":           amb_lat,
+            "lon":           amb_lon,
+            "timestamp":     now,
+            "priority":      None,
+            "requested_at":  None,
+            "target_light":  None,
+            "prev_distance": None,
+        }
         return jsonify({
-            "unit_id": unit_id,
-            "nearest_junction": nearest_signal['junction_name'],
-            "distance_km": round(min_dist, 2),
-            "command": "KEEP_NORMAL"
+            "username": username,
+            "command":  "KEEP_NORMAL",
+            "message":  "No active request — location tracked only"
         }), 200
 
+    priority     = log.get('priority', 'Non-Critical')
+    requested_at = log.get('timestamp', now)
+
+    # ── 2. SPEED CALCULATION ──
+    speed_kmh = 30.0
+    prev = ambulance_tracker.get(username)
+
+    if prev:
+        time_diff = (now - prev['timestamp']).total_seconds()
+        if time_diff > 0:
+            dist_moved = calculate_distance(
+                prev['lat'], prev['lon'], amb_lat, amb_lon
+            )
+            speed_kmh = (dist_moved / time_diff) * 3600
+            if speed_kmh < 1:
+                speed_kmh = 30.0
+
+    # ── 3. FIND NEAREST LIGHT ──
+    junctions = list(signals_collection.find({}))
+
+    nearest_junction = None
+    nearest_light_id = 1
+    min_dist         = 999.0
+
+    for junction in junctions:
+        lights = junction.get('lights', [])
+        for light in lights:
+            dist = calculate_distance(amb_lat, amb_lon, light['lat'], light['lon'])
+            if dist < min_dist:
+                min_dist         = dist
+                nearest_junction = junction
+                nearest_light_id = light['light_id']
+
+    # ── 4. UPDATE TRACKER ──
+    ambulance_tracker[username] = {
+        "lat":           amb_lat,
+        "lon":           amb_lon,
+        "timestamp":     now,
+        "priority":      priority,
+        "requested_at":  requested_at,
+        "target_light":  nearest_light_id,
+        "prev_distance": min_dist,
+    }
+
+    if not nearest_junction:
+        return jsonify({
+            "username": username,
+            "command":  "KEEP_NORMAL",
+            "eta":      None,
+        }), 200
+
+    radius_km = nearest_junction['trigger_radius'] / 1000
+
+    # ── 5. CHECK IF AMBULANCE HAS PASSED ──
+    if prev:
+        prev_target = prev.get('target_light')
+        prev_dist   = prev.get('prev_distance', min_dist)
+
+        if prev_dist < radius_km and min_dist > prev_dist:
+            print(f"✅ {username} passed — resuming AUTO")
+            priority_junction = signals_collection.find_one(
+                {"priority_unit": username}
+            )
+            if priority_junction:
+                signals_collection.update_one(
+                    {"_id": priority_junction["_id"]},
+                    {"$set": {
+                        "mode":           "AUTO",
+                        "current_status": "RED",
+                        "active_light":   prev_target or 1,
+                        "priority_unit":  None,
+                        "last_updated":   now
+                    }}
+                )
+            ambulance_tracker.pop(username, None)
+            return jsonify({
+                "username": username,
+                "command":  "KEEP_NORMAL",
+                "message":  "Ambulance passed — AUTO resumed"
+            }), 200
+
+    # ── 6. WITHIN TRIGGER RADIUS? ──
+    if min_dist >= radius_km:
+        return jsonify({
+            "username":         username,
+            "nearest_junction": nearest_junction['junction_name'],
+            "distance_km":      round(min_dist, 3),
+            "command":          "KEEP_NORMAL",
+            "eta_seconds":      None,
+        }), 200
+
+    # ── 7. ETA CALCULATION ──
+    speed_ms  = speed_kmh / 3.6
+    dist_m    = min_dist * 1000
+    eta_secs  = (dist_m / speed_ms) if speed_ms > 0 else 999
+
+    print(f"🚑 {username} | Priority: {priority} | Distance: {round(dist_m)}m | Speed: {round(speed_kmh)}km/h | ETA: {round(eta_secs)}s")
+
+    # ── 8. PRIORITY & FCFS CHECK ──
+    current_junction = signals_collection.find_one(
+        {"junction_id": nearest_junction['junction_id']}
+    )
+    current_mode = current_junction.get('mode', 'AUTO')
+
+    if current_mode == 'PRIORITY':
+        active_unit = current_junction.get('priority_unit')
+        if active_unit and active_unit != username:
+            active_info      = ambulance_tracker.get(active_unit, {})
+            active_priority  = active_info.get('priority', 'Non-Critical')
+            active_requested = active_info.get('requested_at', now)
+
+            if priority == 'Non-Critical' and active_priority == 'Critical':
+                return jsonify({
+                    "username":    username,
+                    "command":     "KEEP_NORMAL",
+                    "message":     "Higher priority ambulance has control",
+                    "eta_seconds": round(eta_secs)
+                }), 200
+
+            if priority == active_priority and requested_at > active_requested:
+                return jsonify({
+                    "username":    username,
+                    "command":     "KEEP_NORMAL",
+                    "message":     "Earlier ambulance has control (FCFS)",
+                    "eta_seconds": round(eta_secs)
+                }), 200
+
+    # ── 9. SET GREEN WHEN ETA <= 2 SECONDS ──
+    if eta_secs <= 2:
+        print(f"🚨 PRIORITY: {username} arriving in {round(eta_secs)}s — Light {nearest_light_id} GREEN")
+        signals_collection.update_one(
+            {"junction_id": nearest_junction['junction_id']},
+            {"$set": {
+                "mode":           "PRIORITY",
+                "current_status": "GREEN",
+                "active_light":   nearest_light_id,
+                "priority_unit":  username,
+                "last_updated":   now
+            }}
+        )
+        return jsonify({
+            "username":         username,
+            "nearest_junction": nearest_junction['junction_name'],
+            "distance_km":      round(min_dist, 3),
+            "command":          "SET_GREEN",
+            "target_light":     nearest_light_id,
+            "target_esp32":     nearest_junction['esp32_id'],
+            "eta_seconds":      round(eta_secs),
+            "speed_kmh":        round(speed_kmh, 1),
+        }), 200
+
+    # ── 10. APPROACHING BUT ETA > 2s ──
     return jsonify({
-        "unit_id": unit_id,
-        "nearest_junction": None,
-        "distance_km": None,
-        "command": "KEEP_NORMAL"
+        "username":         username,
+        "nearest_junction": nearest_junction['junction_name'],
+        "distance_km":      round(min_dist, 3),
+        "command":          "KEEP_NORMAL",
+        "eta_seconds":      round(eta_secs),
+        "speed_kmh":        round(speed_kmh, 1),
     }), 200
+        
 # ================= GUEST LOCATION TRACKING =================
 @app.route('/api/guest/update_location', methods=['POST'])
 def guest_update():
@@ -154,10 +297,12 @@ def request_priority():
     # Requests are APPROVED by default for your selected drivers
     new_request = {
         "unit_id": data.get('unit_id'),
+        "username":    data.get('username'),
         "driver_name": data.get('driver_name'),
         "start": data.get('start'),
         "destination": data.get('destination'),
         "phone": data.get('phone'),
+        "priority": data.get('priority', 'Non-Critical'),
         "status": "APPROVED", 
         "timestamp": datetime.datetime.utcnow()
     }
@@ -221,6 +366,22 @@ def signal_override():
         "success": True,
         "message": f"Signal {junction_id} set to {msg_mode}"
     }), 200
+# ================= SET ACTIVE LIGHT =================
+@app.route('/api/admin/set_active_light', methods=['POST'])
+def set_active_light():
+    data         = request.json
+    junction_id  = data.get('junction_id')
+    active_light = int(data.get('active_light'))
+
+    signals_collection.update_one(
+        {"junction_id": junction_id},
+        {"$set": {
+            "active_light": active_light,
+            "mode":         "MANUAL",
+            "last_updated": datetime.datetime.utcnow()
+        }}
+    )
+    return jsonify({"success": True, "message": f"Active light set to {active_light}"}), 200
 
 @app.route('/api/admin/signals', methods=['GET'])
 def get_all_signals():
@@ -236,7 +397,37 @@ def get_all_signals():
         return jsonify(signals), 200
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
-    
+    # ================= ESP32 JUNCTION STATUS POLLING =================
+@app.route('/api/junction/status', methods=['GET'])
+def get_junction_status():
+    esp32_id = request.args.get('esp32_id', '')
+
+    junction = signals_collection.find_one({"esp32_id": esp32_id}, {"_id": 0})
+
+    if not junction:
+        return jsonify({"success": False, "message": "Junction not found"}), 404
+
+    active_light   = junction.get('active_light', 1)
+    current_status = junction.get('current_status', 'RED')
+    mode           = junction.get('mode', 'AUTO')
+    manual_color   = junction.get('manual_color', None)
+
+    lights = {}
+    for i in range(1, 5):
+        if i == active_light:
+            if mode == "MANUAL" and manual_color:
+                lights[f"light_{i}"] = manual_color
+            else:
+                lights[f"light_{i}"] = current_status
+        else:
+            lights[f"light_{i}"] = "RED"
+
+    return jsonify({
+        "junction_id":  junction.get('junction_id'),
+        "mode":         mode,
+        "active_light": active_light,
+        **lights
+    }), 200
 @app.route('/api/admin/requests', methods=['GET'])
 def get_active_requests():
     try:
@@ -314,7 +505,8 @@ def login():
         return jsonify({
             "success": True, 
             "user": {
-                "name": user['name'], 
+                "name": user['name'],
+                "username": user['username'], 
                 "unit_id": user['unit_id'], 
                 "role": user['role'], 
                 "phone": user.get('phone')
@@ -336,38 +528,47 @@ def get_units():
 def traffic_light_loop():
     while True:
         try:
-            now = datetime.datetime.utcnow()
-            signals = signals_collection.find({"mode": "AUTO"})
-            for sig in signals:
-                current_status = sig.get('current_status', 'RED')
-                last_updated = sig.get('last_updated', now)
-                
-                # Make sure last_updated is a datetime object, fallback if missing
+            now       = datetime.datetime.utcnow()
+            junctions = signals_collection.find({"mode": "AUTO"})
+
+            for junction in junctions:
+                current_status   = junction.get('current_status', 'RED')
+                last_updated     = junction.get('last_updated', now)
+                active_light     = junction.get('active_light', 1)
+
                 if not isinstance(last_updated, datetime.datetime):
                     last_updated = now
-                
-                elapsed = (now - last_updated).total_seconds()
-                new_status = current_status
-                
-                if current_status == "RED" and elapsed >= 60:
+
+                elapsed          = (now - last_updated).total_seconds()
+                new_status       = current_status
+                new_active_light = active_light
+
+                # GREEN 7s → YELLOW 2s → RED 1s → next lane
+                if current_status == "GREEN" and elapsed >= 7:
                     new_status = "YELLOW"
-                elif current_status == "YELLOW" and elapsed >= 20:
+
+                elif current_status == "YELLOW" and elapsed >= 2:
+                    new_status       = "RED"
+                    new_active_light = (active_light % 4) + 1  # 1→2→3→4→1
+
+                elif current_status == "RED" and elapsed >= 1:
                     new_status = "GREEN"
-                elif current_status == "GREEN" and elapsed >= 60:
-                    new_status = "RED"
-                
-                if new_status != current_status:
+
+                if new_status != current_status or new_active_light != active_light:
                     signals_collection.update_one(
-                        {"_id": sig["_id"]},
+                        {"_id": junction["_id"]},
                         {"$set": {
                             "current_status": new_status,
-                            "last_updated": now
+                            "active_light":   new_active_light,
+                            "last_updated":   now
                         }}
                     )
+                    print(f"🚦 {junction['junction_name']}: Light {new_active_light} → {new_status}")
+
         except Exception as e:
             print(f"Traffic Loop Error: {e}")
-            
-        time.sleep(2)
+
+        time.sleep(1)  # Every 1 second for smooth transitions
 
 # ================= RUN SERVER =================
 if __name__ == '__main__':

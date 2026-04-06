@@ -8,7 +8,7 @@ class TrafficService {
 
   //SMART URL SELECTOR 
   static String get serverUrl {
-    return "https://atps-app-1.onrender.com/api";
+    return "http://10.100.219.157:5000/api";
   }
 
   // ================= LOGIN =================
@@ -101,7 +101,7 @@ class TrafficService {
 }
 
   // ================= TRAFFIC METHODS =================
-  Future<Map<String, dynamic>> requestGreen(String unitId, String driverName, String start, String destination, String phone) async {
+  Future<Map<String, dynamic>> requestGreen(String unitId, String username, String driverName, String start, String destination, String phone, String priority) async {
     if (!useRealServer) {
       await Future.delayed(const Duration(seconds: 2));
       return {"success": true};
@@ -113,10 +113,12 @@ class TrafficService {
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "unit_id": unitId,
+          "username":    username,
           "driver_name": driverName,
           "start": start,
           "destination": destination,
-          "phone": phone
+          "phone": phone,
+          "priority": priority,
         }),
       );
       return jsonDecode(response.body);
