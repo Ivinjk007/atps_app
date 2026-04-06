@@ -327,6 +327,20 @@ def update_status():
     )
     return jsonify({"success": True, "message": f"Status updated to {new_status}"}), 200
 
+@app.route('/api/driver/request_status/<unit_id>', methods=['GET'])
+def get_driver_status(unit_id):
+    log = logs_collection.find_one(
+        {"unit_id": unit_id},
+        sort=[("timestamp", -1)]
+    )
+    if not log:
+        return jsonify({"status": "NONE"}), 200
+    
+    return jsonify({
+        "status": log.get("status", "NONE"),
+        "request_id": str(log["_id"])
+    }), 200
+
 @app.route('/api/admin/delete_request', methods=['POST'])
 def delete_request():
     data = request.json
