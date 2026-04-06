@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:signals_flutter/signals_flutter.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -18,6 +19,25 @@ class _DriverDashboardState extends State<DriverDashboard> {
   
   // New Priority State
   String _selectedPriority = "Critical";
+
+  Timer? _statusTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _statusTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (store.status.value == "GREEN") {
+        store.checkMyRequestStatus();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _statusTimer?.cancel();
+    super.dispose();
+  }
+
   // LOGOUT FUNCTION
   void _logout() async {
     AppSession.loggedInRole = null; // Clear the saved session

@@ -179,7 +179,7 @@ final trafficSignals = listSignal<Map<String, dynamic>>([]);
     isLoading.value = true;
     await _api.resetSignal(unitId.value);
 
-    // Auto-remove from active emergencies locally
+    // Auto-remove from active emergencies locally without mutating the old map
     final currentRequests = List<Map<String, dynamic>>.from(emergencyRequests.value);
     List<Map<String, dynamic>> updatedRequests = [];
     
@@ -187,16 +187,17 @@ final trafficSignals = listSignal<Map<String, dynamic>>([]);
       if (req['unit'] == unitId.value && req['status'] == 'APPROVED') {
         if (isFalseAlarm) {
            _api.deleteRequest(req['id']);
-           // Do not add to updatedRequests so it disappears locally
         } else {
-           req['status'] = 'COMPLETED';
+           final updatedReq = Map<String, dynamic>.from(req);
+           updatedReq['status'] = 'COMPLETED';
            _api.updateRequestStatus(req['id'], 'COMPLETED');
-           updatedRequests.add(req);
+           updatedRequests.add(updatedReq);
         }
       } else {
         updatedRequests.add(req);
       }
     }
+    // Deep equality check will now see the difference and trigger UI updates instantly!
     emergencyRequests.value = updatedRequests;
 
     status.value = "RED";
@@ -205,16 +206,37 @@ final trafficSignals = listSignal<Map<String, dynamic>>([]);
 
   // --- ACTIONS: ADMIN ---
 
-void denyRequest(String requestId) {
-  final currentRequests = List<Map<String, dynamic>>.from(emergencyRequests.value);
-  final index = currentRequests.indexWhere((req) => req['id'] == requestId);
-  
-  if (index != -1) {
-    currentRequests[index]['status'] = 'COMPLETED';
-    _api.updateRequestStatus(requestId, 'COMPLETED');
-    emergencyRequests.value = currentRequests; // This triggers the UI refresh
+  Future<void> checkMyRequestStatus() async {
+    if (status.value != "GREEN") return;
+    
+    final currentStatus = await _api.checkDriverStatus(unitId.value);
+    
+    // If the Admin denied or completed the request remotely
+    if (currentStatus == "COMPLETED" || currentStatus == "DENIED") {
+      status.value = "RED";
+      
+      // Auto-remove from active emergencies locally so the dashboard UI and counters stay correct
+      final currentRequests = List<Map<String, dynamic>>.from(emergencyRequests.value);
+      currentRequests.removeWhere((req) => req['unit'] == unitId.value && req['status'] == 'APPROVED');
+      emergencyRequests.value = currentRequests;
+    }
   }
-}
+
+  void denyRequest(String requestId) {
+    final currentRequests = List<Map<String, dynamic>>.from(emergencyRequests.value);
+    final index = currentRequests.indexWhere((req) => req['id'] == requestId);
+    
+    if (index != -1) {
+      final updatedReq = Map<String, dynamic>.from(currentRequests[index]);
+      updatedReq['status'] = 'DENIED';
+      
+      currentRequests[index] = updatedReq;
+      
+      _api.updateRequestStatus(requestId, 'DENIED');
+      // Triggers immediate UI rebuild since we passed a new immutable copy
+      emergencyRequests.value = currentRequests; 
+    }
+  }
 
   Future<void> toggleSignalManual(String junctionId, String newColor) async {
     try {

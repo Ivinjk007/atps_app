@@ -8,7 +8,7 @@ class TrafficService {
 
   //SMART URL SELECTOR 
   static String get serverUrl {
-    return "http://10.100.219.157:5000/api";
+    return "https://atps-app-1.onrender.com/api";
   }
 
   // ================= LOGIN =================
@@ -131,6 +131,19 @@ class TrafficService {
   Future<void> resetSignal(String unitId) async {
     // Optional: in a real implementation we could call an endpoint to mark the request as COMPLETED or similar.
     await Future.delayed(const Duration(seconds: 1));
+  }
+
+  Future<String> checkDriverStatus(String unitId) async {
+    if (!useRealServer) return "APPROVED";
+    try {
+      final response = await http.get(Uri.parse("$serverUrl/driver/request_status/$unitId"));
+      if (response.statusCode == 200) {
+         return jsonDecode(response.body)["status"] ?? "NONE";
+      }
+    } catch (e) {
+      print("checkDriverStatus error: $e");
+    }
+    return "APPROVED"; // default fallback
   }
 
   Future<bool> updateRequestStatus(String requestId, String status) async {
