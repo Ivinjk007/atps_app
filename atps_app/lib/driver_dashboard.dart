@@ -265,7 +265,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
 
     // Location is handled by external GPS modules, so we bypass manual user input
     // and immediately activate the priority sequence.
-    store.requestPriority("Live GPS Tracking", "Assigned Hospital");
+    store.requestPriority("Live GPS Tracking", "Assigned Hospital",_selectedPriority);
   }
 
   // Helper method to color-code the priority dropdown

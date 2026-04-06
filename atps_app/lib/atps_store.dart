@@ -96,6 +96,7 @@ late final availableUnitsCount = computed(() {
   final unitId = signal("AMB-042");
   final driverName = signal("");
   final driverPhone = signal("");
+  final username = signal("");  
   final eta = signal("8:45");
 
   // =========================
@@ -115,17 +116,15 @@ final trafficSignals = listSignal<Map<String, dynamic>>([]);
       if (response.statusCode == 200) {
         List<dynamic> data = jsonDecode(response.body);
         final formattedSignals = data.map((sig) => {
-          "id": sig["junction_id"],
-          "name": sig["junction_name"],
-          "status": sig["current_status"],
-          "mode": sig["mode"] ?? "AUTO",
-          "lat": sig["lat"],
-          "lon": sig["lon"],
-          "battery_level": sig["battery_level"] ?? 100,
-          "last_updated": sig["last_updated"],
-          // Set online to true if recently updated. We can default it to true for now since ESP32 will ping
-          "online": true, 
-        }).toList();
+  "id": sig["junction_id"],
+  "name": sig["junction_name"],
+  "status": sig["current_status"],
+  "mode": sig["mode"] ?? "AUTO",
+  "active_light": sig["active_light"] ?? 1,  // ← ADD THIS
+  "battery_level": sig["battery_level"] ?? 100,
+  "last_updated": sig["last_updated"],
+  "online": true,
+}).toList();
         trafficSignals.value = List<Map<String, dynamic>>.from(formattedSignals);
       }
     } catch (e) {
@@ -155,11 +154,11 @@ final trafficSignals = listSignal<Map<String, dynamic>>([]);
   // TRAFFIC ACTIONS
   // =========================
 
-  Future<void> requestPriority(String fromLocation, String toLocation) async {
+  Future<void> requestPriority(String fromLocation, String toLocation, String priority) async {
     if (status.value == "GREEN") return;
 
     isLoading.value = true;
-    final res = await _api.requestGreen(unitId.value, driverName.value, fromLocation, toLocation, driverPhone.value);
+    final res = await _api.requestGreen(unitId.value, username.value, driverName.value, fromLocation, toLocation, driverPhone.value, priority);
     
     // Auto-update active emergency cases locally for instant feedback
     final currentRequests = List<Map<String, dynamic>>.from(emergencyRequests.value);
@@ -274,6 +273,7 @@ void denyRequest(String requestId) {
         unitId.value = result['user']['unit_id'];
         driverName.value = result['user']['name'] ?? "";
         driverPhone.value = result['user']['phone'] ?? "";
+        this.username.value = result['user']['username'] ?? "";
       }
       return true;
     } else {
@@ -378,4 +378,27 @@ Future<bool> addNewSignal(
     return false;
   }
 }
+Future<void> setActiveLight(String junctionId, int lightId) async {
+    try {
+      final index = trafficSignals.value
+          .indexWhere((element) => element['id'] == junctionId);
+      if (index == -1) return;
+
+      var sig = Map<String, dynamic>.from(trafficSignals.value[index]);
+      sig['active_light'] = lightId;
+      trafficSignals.value[index] = sig;
+      trafficSignals.value = List.from(trafficSignals.value);
+
+      await http.post(
+        Uri.parse("${TrafficService.serverUrl}/admin/set_active_light"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "junction_id": junctionId,
+          "active_light": lightId,
+        }),
+      );
+    } catch (e) {
+      print("Set active light error: $e");
+    }
+  }
 }
