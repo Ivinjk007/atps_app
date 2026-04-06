@@ -584,11 +584,13 @@ def traffic_light_loop():
 
         time.sleep(1)  # Every 1 second for smooth transitions
 
+# ================= START BACKGROUND DAEMON =================
+# We start the loop here unconditionally so that it works when Render runs the app via Gunicorn (WSGI)
+# instead of python auth_server.py
+threading.Thread(target=traffic_light_loop, daemon=True).start()
+
 # ================= RUN SERVER =================
 if __name__ == '__main__':
-    # Start background traffic cycle
-    threading.Thread(target=traffic_light_loop, daemon=True).start()
-    
     # Render assigns a dynamic port via the PORT environment variable
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
