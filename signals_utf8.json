@@ -1,0 +1,43 @@
+﻿[
+  {
+    "active_light": 2,
+    "battery_level": 100,
+    "current_status": "GREEN",
+    "esp32_id": "a123",
+    "green_hold_time": 30,
+    "junction_id": "J-01",
+    "junction_name": "Main Junction",
+    "landmark": "your landmark here",
+    "last_updated": "2026-04-06T17:28:21.558000",
+    "lights": [
+      {
+        "direction": "NORTH",
+        "lat": 9.699563,
+        "light_id": 1,
+        "lon": 76.810644
+      },
+      {
+        "direction": "EAST",
+        "lat": 9.699518,
+        "light_id": 2,
+        "lon": 76.810689
+      },
+      {
+        "direction": "SOUTH",
+        "lat": 9.699473,
+        "light_id": 3,
+        "lon": 76.810644
+      },
+      {
+        "direction": "WEST",
+        "lat": 9.699518,
+        "light_id": 4,
+        "lon": 76.810599
+      }
+    ],
+    "manual_color": "GREEN",
+    "mode": "AUTO",
+    "priority_unit": null,
+    "trigger_radius": 750
+  }
+]
