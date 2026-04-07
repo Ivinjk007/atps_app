@@ -1,0 +1,63 @@
+[
+  {
+    "_id": {
+      "$oid": "69d031a40569ec31f907992b"
+    },
+    "junction_id": "J-01",
+    "junction_name": "Main Junction",
+    "landmark": "your landmark here",
+    "esp32_id": "a123",
+    "trigger_radius": 750,
+    "green_hold_time": 30,
+    "mode": "AUTO",
+    "manual_color": "GREEN",
+    "active_light": 4,
+    "current_status": "RED",
+    "last_updated": {
+      "$date": "2026-04-07T01:13:37.768Z"
+    },
+    "lights": [
+      {
+        "light_id": 1,
+        "direction": "NORTH",
+        "lat": {
+          "$numberDecimal": "9.699900"
+        },
+        "lon": {
+          "$numberDecimal": "76.810644"
+        }
+      },
+      {
+        "light_id": 2,
+        "direction": "EAST",
+        "lat": {
+          "$numberDecimal": "9.699700"
+        },
+        "lon": {
+          "$numberDecimal": "76.810900"
+        }
+      },
+      {
+        "light_id": 3,
+        "direction": "SOUTH",
+        "lat": {
+          "$numberDecimal": "9.699500"
+        },
+        "lon": {
+          "$numberDecimal": "76.810644"
+        }
+      },
+      {
+        "light_id": 4,
+        "direction": "WEST",
+        "lat": {
+          "$numberDecimal": "9.699700"
+        },
+        "lon": {
+          "$numberDecimal": "76.810300"
+        }
+      }
+    ],
+    "priority_unit": "rohan@123"
+  }
+]

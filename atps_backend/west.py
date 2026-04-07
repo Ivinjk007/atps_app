@@ -1,11 +1,11 @@
 import requests
 import time
 
-SERVER = "http://127.0.0.1:5000/api"
+SERVER = "https://atps-app-1.onrender.com/api"
 
 steps = 15
 for i in range(steps):
-    amb_lat = 9.699518
+    amb_lat = 9.699700
     amb_lon = 76.809900 + (i * 0.000050)  # moves eastward
 
     response = requests.post(f"{SERVER}/update_location", json={

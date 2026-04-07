@@ -1,7 +1,7 @@
 import requests
 import time
 
-SERVER = "http://127.0.0.1:5000/api"
+SERVER = "https://atps-app-1.onrender.com/api"
 
 steps = 15
 for i in range(steps):

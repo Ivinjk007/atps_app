@@ -71,6 +71,7 @@ def add_signal():
 def calculate_distance(lat1, lon1, lat2, lon2):
     # Haversine formula to calculate distance in kilometers
     R = 6371 
+    lat1, lon1, lat2, lon2 = float(lat1), float(lon1), float(lat2), float(lon2)
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
     a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
