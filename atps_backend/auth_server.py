@@ -409,6 +409,14 @@ def get_all_signals():
                 s['last_updated'] = lu.isoformat()
             else:
                 s['last_updated'] = str(lu)
+                
+            if 'lights' in s:
+                for light in s['lights']:
+                    if 'lat' in light:
+                        light['lat'] = float(str(light['lat']))
+                    if 'lon' in light:
+                        light['lon'] = float(str(light['lon']))
+
         return jsonify(signals), 200
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
