@@ -295,9 +295,34 @@ def guest_update():
 @app.route('/api/request_priority', methods=['POST'])
 def request_priority():
     data = request.json
-    # Requests are APPROVED by default for your selected drivers
+    unit_id = data.get('unit_id')
+    now = datetime.datetime.utcnow()
+
+    existing_active = logs_collection.find_one({
+        "unit_id": unit_id,
+        "status": "APPROVED"
+    })
+
+    if existing_active:
+        logs_collection.update_one(
+            {"_id": existing_active["_id"]},
+            {"$set": {
+                "start": data.get('start'),
+                "destination": data.get('destination'),
+                "phone": data.get('phone'),
+                "priority": data.get('priority', 'Non-Critical'),
+                "timestamp": now
+            }}
+        )
+        return jsonify({
+            "success": True, 
+            "request_id": str(existing_active["_id"]), 
+            "status": "APPROVED",
+            "message": "Updated existing active request"
+        }), 200
+
     new_request = {
-        "unit_id": data.get('unit_id'),
+        "unit_id": unit_id,
         "username":    data.get('username'),
         "driver_name": data.get('driver_name'),
         "start": data.get('start'),
@@ -305,7 +330,7 @@ def request_priority():
         "phone": data.get('phone'),
         "priority": data.get('priority', 'Non-Critical'),
         "status": "APPROVED", 
-        "timestamp": datetime.datetime.utcnow()
+        "timestamp": now
     }
     
     result = logs_collection.insert_one(new_request)
